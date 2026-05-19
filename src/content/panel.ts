@@ -1,3 +1,4 @@
+import { APP_BUILD } from "../shared/constants";
 import { formatTime } from "../shared/time";
 import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
@@ -68,7 +69,7 @@ export class PhraseLoopPanel {
     this.root.className = `phraseloop-panel${collapsed ? " is-collapsed" : ""}`;
 
     const header = element("div", "phraseloop-header");
-    header.append(element("div", "phraseloop-title", "PhraseLoop"));
+    header.append(element("div", "phraseloop-title", `PhraseLoop ${APP_BUILD}`));
 
     const collapseButton = button(collapsed ? "+" : "-", collapsed ? "Expand" : "Collapse");
     collapseButton.className = "phraseloop-icon-button";

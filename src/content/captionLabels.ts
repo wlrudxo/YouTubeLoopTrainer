@@ -24,6 +24,12 @@ export async function getCaptionLabelForRange(
     return timedTextLabel;
   }
 
+  const visibleCaptionLabel = getVisibleCaptionLabel(debug);
+  if (visibleCaptionLabel) {
+    debug?.log("captions", "using visible caption label", { label: visibleCaptionLabel });
+    return visibleCaptionLabel;
+  }
+
   const track = chooseCaptionTrack(video.textTracks);
   if (!track) {
     debug?.log("captions", "no browser TextTrack fallback available");
@@ -96,6 +102,18 @@ function sleep(ms: number): Promise<void> {
 
 function cueToText(cue: TextTrackCue): string {
   return "text" in cue && typeof cue.text === "string" ? cue.text : "";
+}
+
+function getVisibleCaptionLabel(debug?: DebugLogger): string | null {
+  const segments = Array.from(document.querySelectorAll<HTMLElement>(".ytp-caption-segment"));
+  const label = joinCaptionLines(segments.map((segment) => segment.textContent ?? ""));
+
+  debug?.log("captions", "visible caption DOM lookup", {
+    segmentCount: segments.length,
+    label
+  });
+
+  return label || null;
 }
 
 async function getTimedTextCaptionLabel(start: number, end: number, debug?: DebugLogger): Promise<string | null> {
@@ -213,7 +231,7 @@ async function findCaptionTracks(debug?: DebugLogger): Promise<TimedTextTrackGro
   const innertubeGroups = await fetchInnertubeCaptionTrackGroups(debug);
   groups.push(...innertubeGroups);
 
-  return groups.filter((group) => group.tracks.length > 0);
+  return groups;
 }
 
 function chooseTimedTextTrack(tracks: TimedTextTrack[]): TimedTextTrack | null {
@@ -352,6 +370,10 @@ function safeUrlHost(url: string): string | undefined {
 }
 
 type PlayerResponse = {
+  playabilityStatus?: {
+    status?: string;
+    reason?: string;
+  };
   captions?: {
     playerCaptionsTracklistRenderer?: {
       captionTracks?: unknown[];
@@ -362,13 +384,16 @@ type PlayerResponse = {
 type InnertubeClient = {
   source: string;
   clientName: string;
+  clientHeaderName: string;
   clientVersion: string;
 };
 
 const INNERTUBE_CLIENTS: InnertubeClient[] = [
-  { source: "innertube-web", clientName: "WEB", clientVersion: "2.20240519.01.00" },
-  { source: "innertube-mweb", clientName: "MWEB", clientVersion: "2.20240519.01.00" },
-  { source: "innertube-tv", clientName: "TVHTML5", clientVersion: "7.20240519.01.00" }
+  { source: "innertube-web", clientName: "WEB", clientHeaderName: "1", clientVersion: "2.20240519.01.00" },
+  { source: "innertube-mweb", clientName: "MWEB", clientHeaderName: "2", clientVersion: "2.20240519.01.00" },
+  { source: "innertube-tv", clientName: "TVHTML5", clientHeaderName: "7", clientVersion: "7.20240519.01.00" },
+  { source: "innertube-android", clientName: "ANDROID", clientHeaderName: "3", clientVersion: "19.09.37" },
+  { source: "innertube-ios", clientName: "IOS", clientHeaderName: "5", clientVersion: "19.09.3" }
 ];
 
 async function fetchInnertubeCaptionTrackGroups(debug?: DebugLogger): Promise<TimedTextTrackGroup[]> {
@@ -397,7 +422,7 @@ async function fetchInnertubeCaptionTrackGroups(debug?: DebugLogger): Promise<Ti
         credentials: "include",
         headers: {
           "content-type": "application/json",
-          "x-youtube-client-name": client.clientName,
+          "x-youtube-client-name": client.clientHeaderName,
           "x-youtube-client-version": client.clientVersion
         },
         body: JSON.stringify({
@@ -428,6 +453,13 @@ async function fetchInnertubeCaptionTrackGroups(debug?: DebugLogger): Promise<Ti
 
       const playerResponse = JSON.parse(text) as PlayerResponse;
       const tracks = playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+      debug?.log("captions", `Innertube player summary (${client.source})`, {
+        playabilityStatus: playerResponse.playabilityStatus?.status,
+        playabilityReason: playerResponse.playabilityStatus?.reason,
+        hasCaptions: Boolean(playerResponse.captions),
+        captionTrackCount: Array.isArray(tracks) ? tracks.length : 0,
+        topLevelKeys: Object.keys(playerResponse).slice(0, 12)
+      });
 
       groups.push({
         source: client.source,

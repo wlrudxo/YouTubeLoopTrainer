@@ -2,6 +2,7 @@ import { ensureVideo } from "../shared/data";
 import { createLoopId } from "../shared/ids";
 import { resolveLoopLabel } from "../shared/labels";
 import * as storage from "../shared/storage";
+import { APP_BUILD } from "../shared/constants";
 import { formatRangeLabel } from "../shared/time";
 import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
@@ -45,7 +46,7 @@ void boot();
 
 async function boot(): Promise<void> {
   debug.subscribe(render);
-  debug.log("app", "boot");
+  debug.log("app", "boot", { build: APP_BUILD });
 
   loopEngine = new LoopEngine((loop) => {
     render({ activeLoopId: loop?.id ?? null });
