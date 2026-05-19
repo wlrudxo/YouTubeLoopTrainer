@@ -9,7 +9,7 @@ export type ShortcutHandlers = {
 export function registerShortcuts(handlers: ShortcutHandlers): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     if (handlers.isPhraseLoopLabelInput(event.target)) {
-      if (event.key === "Enter") {
+      if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         handlers.save();
       }

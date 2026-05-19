@@ -85,12 +85,21 @@
 .phraseloop-label-input,
 .phraseloop-rename-input {
   width: 100%;
-  min-height: 30px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   padding: 4px 8px;
   color: #111827;
   font: inherit;
+}
+
+.phraseloop-label-input {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.phraseloop-rename-input {
+  min-height: 78px;
+  resize: vertical;
 }
 
 .phraseloop-message {

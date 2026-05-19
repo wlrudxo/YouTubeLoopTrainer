@@ -87,10 +87,10 @@ export class PhraseLoopPanel {
     const labelWrap = element("label", "phraseloop-label-wrap");
     labelWrap.append(element("span", "phraseloop-field-label", "Name"));
     const labelRow = element("div", "phraseloop-label-row");
-    const labelInput = document.createElement("input");
+    const labelInput = document.createElement("textarea");
     labelInput.className = LABEL_INPUT_CLASS;
-    labelInput.type = "text";
     labelInput.value = draft.label;
+    labelInput.rows = 3;
     labelInput.placeholder = validation.ok ? "Loop label" : "Set A and B markers";
     labelInput.disabled = !validation.ok;
     labelInput.addEventListener("input", () => this.actions.updateDraftLabel(labelInput.value));
@@ -165,10 +165,10 @@ export class PhraseLoopPanel {
 
   private renderRenameRow(row: HTMLElement, loop: Loop): void {
     row.innerHTML = "";
-    const input = document.createElement("input");
+    const input = document.createElement("textarea");
     input.className = "phraseloop-rename-input";
-    input.type = "text";
     input.value = loop.label;
+    input.rows = 3;
 
     let done = false;
     const save = () => {
@@ -183,8 +183,14 @@ export class PhraseLoopPanel {
     };
 
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") save();
-      if (event.key === "Escape") cancel();
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        save();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancel();
+      }
     });
     input.addEventListener("blur", save);
     row.append(input);
