@@ -16,6 +16,7 @@
 │   │   ├── loopEngine.ts
 │   │   ├── panel.ts
 │   │   ├── shortcuts.ts
+│   │   ├── visibleCaptionCollector.ts
 │   │   ├── youtube.ts
 │   │   └── content.css
 │   ├── popup/
@@ -165,11 +166,11 @@ Normalization rules:
 
 Responsibilities:
 
-- Clean caption cue text.
+- Clean visible caption text.
 - Remove caption markup.
 - Remove bracketed non-speech annotations such as `[Music]`.
 - Collapse whitespace.
-- Join unique cue lines for a readable loop label.
+- Join unique visible caption samples for a readable loop label.
 
 ### IDs
 
@@ -258,16 +259,21 @@ Responsibilities:
 
 Responsibilities:
 
-- Read browser-exposed YouTube `TextTrack` entries from the current `HTMLVideoElement`.
-- Read YouTube timedtext caption track URLs from the page's initial player response as a fallback.
-- Retry caption track discovery through YouTube Innertube player clients when watch-page timedtext URLs fail.
-- Prefer English caption/subtitle tracks.
-- Allow auto-generated English caption tracks.
-- Load cues by temporarily setting disabled tracks to `hidden` when needed.
-- Extract cue text overlapping the sorted A-B range.
+- Read currently visible YouTube caption text from `.ytp-caption-segment`.
 - Return `null` when no usable caption text is available.
 
-If caption extraction fails, the content script keeps the time-range label fallback.
+### Visible Caption Collector
+
+`src/content/visibleCaptionCollector.ts`
+
+Responsibilities:
+
+- Start sampling visible caption DOM when the first marker is set.
+- Stop sampling when the second marker is set.
+- Join unique visible caption samples into the draft label.
+- Reset collection on save, video navigation, and page unload.
+
+If no visible caption text is collected, the content script keeps the time-range label fallback. Captions skipped by seeking are not collected.
 
 ### Panel UI
 
@@ -434,7 +440,7 @@ Required cases:
 
 - Format seconds into display time.
 - Generate default time range label.
-- Clean and join caption cue text.
+- Clean and join visible caption text.
 - Validate missing A.
 - Validate missing B.
 - Validate under-1-second loop rejection.

@@ -6,11 +6,12 @@ import { APP_BUILD } from "../shared/constants";
 import { formatRangeLabel } from "../shared/time";
 import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
-import { getCaptionLabelForRange } from "./captionLabels";
+import { getCurrentVisibleCaptionLabel } from "./captionLabels";
 import { DebugLogger } from "./debug";
 import { LoopEngine } from "./loopEngine";
 import { PhraseLoopPanel, type PanelState } from "./panel";
 import { registerShortcuts } from "./shortcuts";
+import { VisibleCaptionCollector } from "./visibleCaptionCollector";
 import { findPanelTarget, findVideoElement, getVideoIdFromUrl, getVideoTitle, getWatchUrl, onYouTubeNavigation } from "./youtube";
 
 type AppState = {
@@ -41,6 +42,8 @@ let unregisterShortcuts: (() => void) | null = null;
 let clearNavigationListener: (() => void) | null = null;
 let highlightTimer: number | null = null;
 let labelRefreshToken = 0;
+let captionCollector: VisibleCaptionCollector | null = null;
+let collectedCaptionLabel = "";
 
 void boot();
 
@@ -51,6 +54,7 @@ async function boot(): Promise<void> {
   loopEngine = new LoopEngine((loop) => {
     render({ activeLoopId: loop?.id ?? null });
   });
+  captionCollector = new VisibleCaptionCollector(debug);
 
   await loadCurrentVideo();
   registerGlobalShortcuts();
@@ -66,6 +70,8 @@ async function loadCurrentVideo(): Promise<void> {
   debug.log("app", "loading video", { videoId, url: window.location.href });
   state.videoId = videoId;
   state.draft = createEmptyDraft();
+  collectedCaptionLabel = "";
+  captionCollector?.reset();
   state.message = "";
   state.highlightedLoopId = null;
   loopEngine?.stop();
@@ -139,6 +145,7 @@ function setMarker(key: "markerA" | "markerB"): void {
   loopEngine?.setVideo(video);
   state.draft[key] = video.currentTime;
   debug.log("draft", `set ${key}`, { currentTime: video.currentTime });
+  updateCaptionCollection();
   void refreshDefaultLabel();
   setMessage("");
   render();
@@ -160,7 +167,7 @@ async function saveDraftLoop(): Promise<void> {
   }
 
   if (!state.draft.labelDirty) {
-    const saveLabel = await getFreshCaptionLabel(validation.start, validation.end);
+    const saveLabel = getFreshCaptionLabel();
     if (saveLabel) {
       state.draft.label = saveLabel;
       debug.log("label", "applied fresh caption label before save", { captionLabel: saveLabel });
@@ -179,6 +186,8 @@ async function saveDraftLoop(): Promise<void> {
   state.video = await storage.addLoop(state.videoId, getVideoTitle(), getWatchUrl(state.videoId), loop);
   debug.log("storage", "saved loop", loop);
   state.draft = createEmptyDraft();
+  collectedCaptionLabel = "";
+  captionCollector?.reset();
   state.highlightedLoopId = loop.id;
   setMessage("Loop saved.");
   scheduleHighlightClear();
@@ -253,13 +262,7 @@ async function refreshDefaultLabel(): Promise<void> {
   debug.log("label", "set time fallback label", { fallbackLabel, start: validation.start, end: validation.end });
   render();
 
-  const video = findVideoElement();
-  if (!video) {
-    debug.log("label", "cannot look up captions because video element is missing");
-    return;
-  }
-
-  const captionLabel = await getCaptionLabelForRange(video, validation.start, validation.end, debug);
+  const captionLabel = getPreferredCaptionLabel();
   const markersStillMatch =
     state.draft.markerA !== null &&
     state.draft.markerB !== null &&
@@ -280,14 +283,21 @@ async function refreshDefaultLabel(): Promise<void> {
   }
 }
 
-async function getFreshCaptionLabel(start: number, end: number): Promise<string | null> {
-  const video = findVideoElement();
-  if (!video) {
-    debug.log("label", "cannot refresh caption before save because video element is missing");
-    return null;
+function getPreferredCaptionLabel(): string | null {
+  if (collectedCaptionLabel) {
+    debug.log("label", "using collected caption label", { captionLabel: collectedCaptionLabel });
+    return collectedCaptionLabel;
   }
 
-  return getCaptionLabelForRange(video, start, end, debug);
+  return getCurrentVisibleCaptionLabel(debug);
+}
+
+function getFreshCaptionLabel(): string | null {
+  const currentCollected = captionCollector?.stop() ?? "";
+  if (currentCollected) {
+    collectedCaptionLabel = currentCollected;
+  }
+  return getPreferredCaptionLabel();
 }
 
 function setMessage(message: string): void {
@@ -331,8 +341,23 @@ function createEmptyDraft(): DraftLoop {
   };
 }
 
+function updateCaptionCollection(): void {
+  const markerCount = Number(state.draft.markerA !== null) + Number(state.draft.markerB !== null);
+
+  if (markerCount === 1) {
+    collectedCaptionLabel = "";
+    captionCollector?.start();
+    return;
+  }
+
+  if (markerCount === 2) {
+    collectedCaptionLabel = captionCollector?.stop() ?? "";
+  }
+}
+
 window.addEventListener("pagehide", () => {
   unregisterShortcuts?.();
   clearNavigationListener?.();
   loopEngine?.destroy();
+  captionCollector?.reset();
 });

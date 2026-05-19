@@ -68,29 +68,29 @@ Each saved loop must have a label.
 
 Requirements:
 
-- If an English or auto-generated caption track is available, the default label should use the caption text that overlaps the sorted A-B range.
-- If caption text is unavailable, a default label is generated from the sorted time range.
+- If YouTube captions are visible during A-B marking, the default label should use the visible caption text collected between the first marker press and the second marker press.
+- If no visible caption text is collected, a default label is generated from the sorted time range.
 - Time fallback format: `01:12.4 - 01:18.9`
 - The label input is editable before save.
-- Empty or whitespace-only label input falls back to the generated default label, or the time-range label if no caption label is available.
+- Empty or whitespace-only label input falls back to the generated caption label, or the time-range label if no caption label is available.
 - After a successful save, A marker, B marker, label input, and label dirty state are cleared.
 
 Draft label dirty flag:
 
-- When both markers are present, PhraseLoop auto-populates the label input with caption text when possible, otherwise the time-range label.
+- When both markers are present, PhraseLoop auto-populates the label input with collected visible caption text when possible, otherwise the time-range label.
 - As long as the user has not manually edited the label, marker changes update the label automatically.
 - Once the user edits the label, PhraseLoop preserves that custom label even if A or B changes.
 - The dirty flag resets after save.
 
 Caption label constraints:
 
-- Use browser-exposed YouTube `TextTrack` cues.
-- If `TextTrack` cues are unavailable, read YouTube timedtext caption data from the current page's player response.
-- If watch-page timedtext URLs return empty captions, retry caption track discovery through YouTube Innertube player clients.
-- Prefer English tracks.
-- Auto-generated English captions are acceptable.
-- If no suitable cue text is available, keep the time-range fallback.
-- Do not fetch or store full transcripts in MVP.
+- Use visible YouTube caption DOM, such as `.ytp-caption-segment`.
+- Start collecting visible captions when the first marker is set.
+- Stop collecting visible captions when the second marker is set.
+- Save uses the collected caption label, unless the user manually edited the label.
+- If the user skips over part of the video, skipped captions are not collected because they were never shown on screen.
+- If no visible caption text is collected, keep the time-range fallback.
+- Do not fetch timed transcripts, call YouTube internal transcript APIs, or store full transcripts in MVP.
 
 ### 4.3 Save Behavior
 
