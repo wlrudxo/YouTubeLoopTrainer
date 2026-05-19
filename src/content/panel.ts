@@ -75,8 +75,8 @@ export class PhraseLoopPanel {
 
     const headerActions = element("div", "phraseloop-header-actions");
     if (video?.progress) {
-      const progressTime = element("span", "phraseloop-progress-time", formatMinute(video.progress.updatedAt));
-      progressTime.title = `Saved progress: ${formatTime(video.progress.time)}`;
+      const progressTime = element("span", "phraseloop-progress-time", formatTime(video.progress.time));
+      progressTime.title = `Saved at ${formatMinute(video.progress.updatedAt)}`;
       headerActions.append(progressTime);
     }
 
