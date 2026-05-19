@@ -133,19 +133,32 @@ function readRunsText(node: Record<string, unknown>): string {
 
 function findTranscriptParams(debug?: DebugLogger): TranscriptParams[] {
   const found: TranscriptParams[] = [];
+  let scriptsWithKeyword = 0;
 
   for (const script of Array.from(document.scripts)) {
     const text = script.textContent;
     if (!text || !text.includes("getTranscriptEndpoint")) continue;
 
+    scriptsWithKeyword += 1;
     for (const params of extractParamsNearTranscriptEndpoints(text)) {
-      found.push({ source: "script", params });
+      found.push({ source: "script-regex", params });
+    }
+
+    const initialData = parseNamedInitialJson(text, "ytInitialData");
+    if (initialData) {
+      found.push(...findTranscriptParamsInJson(initialData, "ytInitialData"));
+    }
+
+    const playerResponse = parseNamedInitialJson(text, "ytInitialPlayerResponse");
+    if (playerResponse) {
+      found.push(...findTranscriptParamsInJson(playerResponse, "ytInitialPlayerResponse"));
     }
   }
 
   const unique = dedupeParams(found);
   debug?.log("transcript", "transcript params found", {
     count: unique.length,
+    scriptsWithKeyword,
     sources: unique.map((item) => item.source),
     paramLengths: unique.map((item) => item.params.length)
   });
@@ -154,7 +167,7 @@ function findTranscriptParams(debug?: DebugLogger): TranscriptParams[] {
 
 function extractParamsNearTranscriptEndpoints(text: string): string[] {
   const params: string[] = [];
-  const endpointPattern = /"getTranscriptEndpoint"\s*:\s*\{[\s\S]{0,800}?"params"\s*:\s*"([^"]+)"/g;
+  const endpointPattern = /"getTranscriptEndpoint"\s*:\s*\{[\s\S]{0,3000}?"params"\s*:\s*"([^"]+)"/g;
   let match: RegExpExecArray | null;
 
   while ((match = endpointPattern.exec(text))) {
@@ -162,6 +175,69 @@ function extractParamsNearTranscriptEndpoints(text: string): string[] {
   }
 
   return params;
+}
+
+function findTranscriptParamsInJson(root: unknown, source: string): TranscriptParams[] {
+  const found: TranscriptParams[] = [];
+
+  visit(root, (node) => {
+    if (!isRecord(node)) return;
+    const endpoint = node.getTranscriptEndpoint;
+    if (isRecord(endpoint) && typeof endpoint.params === "string") {
+      found.push({ source, params: endpoint.params });
+    }
+  });
+
+  return found;
+}
+
+function parseNamedInitialJson(scriptText: string, name: string): unknown | null {
+  const markerIndex = scriptText.indexOf(name);
+  if (markerIndex < 0) return null;
+
+  const jsonStart = scriptText.indexOf("{", markerIndex);
+  if (jsonStart < 0) return null;
+
+  const jsonText = readBalancedJsonObject(scriptText, jsonStart);
+  if (!jsonText) return null;
+
+  try {
+    return JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+}
+
+function readBalancedJsonObject(text: string, startIndex: number): string | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+    } else if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(startIndex, index + 1);
+    }
+  }
+
+  return null;
 }
 
 function dedupeParams(items: TranscriptParams[]): TranscriptParams[] {
