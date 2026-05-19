@@ -14,6 +14,8 @@ import { registerShortcuts } from "./shortcuts";
 import { VisibleCaptionCollector } from "./visibleCaptionCollector";
 import {
   ensureCaptionsEnabled,
+  getChannelAvatarUrl,
+  getChannelTitle,
   findPanelTarget,
   findVideoElement,
   getVideoIdFromUrl,
@@ -87,11 +89,19 @@ async function loadCurrentVideo(): Promise<void> {
 
   const existing = await storage.getVideo(videoId);
   if (existing) {
-    state.video = existing;
+    const metadata = getCurrentVideoMetadata();
+    state.video = {
+      ...existing,
+      title: getVideoTitle() || existing.title,
+      url: getWatchUrl(videoId) || existing.url,
+      channelTitle: metadata.channelTitle || existing.channelTitle,
+      channelAvatarUrl: metadata.channelAvatarUrl || existing.channelAvatarUrl
+    };
+    await storage.upsertVideo(state.video);
     debug.log("storage", "loaded existing video loops", { videoId, loops: existing.loops.length });
   } else {
     const data = await storage.readData();
-    state.video = ensureVideo(data, videoId, getVideoTitle(), getWatchUrl(videoId));
+    state.video = ensureVideo(data, videoId, getVideoTitle(), getWatchUrl(videoId), getCurrentVideoMetadata());
     debug.log("storage", "created in-memory video entry", { videoId });
   }
 
@@ -216,7 +226,7 @@ async function saveDraftLoop(): Promise<void> {
     updatedAt: new Date().toISOString()
   };
 
-  state.video = await storage.addLoop(state.videoId, getVideoTitle(), getWatchUrl(state.videoId), loop);
+  state.video = await storage.addLoop(state.videoId, getVideoTitle(), getWatchUrl(state.videoId), loop, getCurrentVideoMetadata());
   debug.log("storage", "saved loop", loop);
   state.draft = createEmptyDraft();
   collectedCaptionLabel = "";
@@ -377,6 +387,13 @@ function createEmptyDraft(): DraftLoop {
     markerB: null,
     label: "",
     labelDirty: false
+  };
+}
+
+function getCurrentVideoMetadata(): { channelTitle?: string; channelAvatarUrl?: string } {
+  return {
+    channelTitle: getChannelTitle() || undefined,
+    channelAvatarUrl: getChannelAvatarUrl() || undefined
   };
 }
 

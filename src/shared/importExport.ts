@@ -105,6 +105,8 @@ function cloneData(data: PhraseLoopData): PhraseLoopData {
         {
           videoId: video.videoId,
           title: video.title,
+          ...(video.channelTitle ? { channelTitle: video.channelTitle } : {}),
+          ...(video.channelAvatarUrl ? { channelAvatarUrl: video.channelAvatarUrl } : {}),
           url: video.url,
           loops: video.loops.map(cloneLoop).sort((a, b) => a.start - b.start)
         }
@@ -135,6 +137,8 @@ function isVideoLoops(value: unknown): value is VideoLoops {
   if (!isRecord(value)) return false;
   if (typeof value.videoId !== "string") return false;
   if (typeof value.title !== "string") return false;
+  if ("channelTitle" in value && typeof value.channelTitle !== "string" && value.channelTitle !== undefined) return false;
+  if ("channelAvatarUrl" in value && typeof value.channelAvatarUrl !== "string" && value.channelAvatarUrl !== undefined) return false;
   if (typeof value.url !== "string") return false;
   if (!Array.isArray(value.loops)) return false;
 

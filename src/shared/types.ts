@@ -11,6 +11,8 @@ export type Loop = {
 export type VideoLoops = {
   videoId: string;
   title: string;
+  channelTitle?: string;
+  channelAvatarUrl?: string;
   url: string;
   loops: Loop[];
 };

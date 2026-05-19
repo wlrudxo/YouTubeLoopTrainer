@@ -1,5 +1,5 @@
 import { STORAGE_KEY } from "./constants";
-import { createEmptyData } from "./data";
+import { createEmptyData, type VideoMetadata } from "./data";
 import { parseImportPayload } from "./importExport";
 import type { Loop, PhraseLoopData, VideoLoops } from "./types";
 
@@ -36,11 +36,13 @@ export async function upsertVideo(video: VideoLoops): Promise<void> {
   await writeData(data);
 }
 
-export async function addLoop(videoId: string, title: string, url: string, loop: Loop): Promise<VideoLoops> {
+export async function addLoop(videoId: string, title: string, url: string, loop: Loop, metadata: VideoMetadata = {}): Promise<VideoLoops> {
   const data = await readData();
   const video = data.videos[videoId] ?? { videoId, title, url, loops: [] };
   video.title = title || video.title;
   video.url = url || video.url;
+  video.channelTitle = metadata.channelTitle || video.channelTitle;
+  video.channelAvatarUrl = metadata.channelAvatarUrl || video.channelAvatarUrl;
   video.loops = [...video.loops, loop].sort((a, b) => a.start - b.start);
   data.videos[videoId] = video;
   await writeData(data);

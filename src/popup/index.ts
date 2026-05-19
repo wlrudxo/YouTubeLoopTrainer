@@ -49,6 +49,8 @@ function createVideoRow(video: VideoLoops): HTMLElement {
   const row = document.createElement("article");
   row.className = "video-row";
 
+  row.append(createAvatar(video));
+
   const body = document.createElement("button");
   body.type = "button";
   body.className = "video-main";
@@ -63,7 +65,11 @@ function createVideoRow(video: VideoLoops): HTMLElement {
   meta.className = "video-meta";
   meta.textContent = `${video.loops.length} loops${formatUpdatedAt(video)}`;
 
-  body.append(title, meta);
+  const channel = document.createElement("span");
+  channel.className = "video-channel";
+  channel.textContent = video.channelTitle || "Unknown channel";
+
+  body.append(title, channel, meta);
 
   const openButton = document.createElement("button");
   openButton.type = "button";
@@ -75,6 +81,23 @@ function createVideoRow(video: VideoLoops): HTMLElement {
 
   row.append(body, openButton);
   return row;
+}
+
+function createAvatar(video: VideoLoops): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.className = "video-avatar";
+
+  if (video.channelAvatarUrl) {
+    const image = document.createElement("img");
+    image.src = video.channelAvatarUrl;
+    image.alt = "";
+    image.referrerPolicy = "no-referrer";
+    wrap.append(image);
+  } else {
+    wrap.textContent = getVideoTitle(video).slice(0, 1).toUpperCase();
+  }
+
+  return wrap;
 }
 
 function createEmptyState(message: string): HTMLElement {
@@ -91,6 +114,7 @@ function openVideo(video: VideoLoops): void {
 function matchesVideo(video: VideoLoops, query: string): boolean {
   return (
     normalize(video.title).includes(query) ||
+    normalize(video.channelTitle ?? "").includes(query) ||
     normalize(video.videoId).includes(query) ||
     video.loops.some((loop) => normalize(loop.label).includes(query))
   );

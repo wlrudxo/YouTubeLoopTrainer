@@ -5,6 +5,9 @@
   "description": "Save and replay multiple A-B loops on YouTube for listening and shadowing practice.",
   "permissions": ["storage", "unlimitedStorage"],
   "host_permissions": ["https://www.youtube.com/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: https://yt3.ggpht.com https://*.googleusercontent.com;"
+  },
   "action": {
     "default_popup": "popup/index.html"
   },

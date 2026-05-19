@@ -12,6 +12,37 @@ export function getVideoTitle(): string {
   return title?.textContent?.trim() || document.title.replace(/ - YouTube$/, "").trim() || "YouTube video";
 }
 
+export function getChannelTitle(): string {
+  const selectors = [
+    "#owner #channel-name a",
+    "ytd-video-owner-renderer #channel-name a",
+    "#upload-info #channel-name a",
+    "ytd-watch-metadata ytd-channel-name a"
+  ];
+
+  for (const selector of selectors) {
+    const text = document.querySelector<HTMLElement>(selector)?.textContent?.trim();
+    if (text) return text;
+  }
+
+  return "";
+}
+
+export function getChannelAvatarUrl(): string {
+  const selectors = [
+    "#owner #avatar img",
+    "ytd-video-owner-renderer #avatar img",
+    "ytd-watch-metadata #avatar img"
+  ];
+
+  for (const selector of selectors) {
+    const src = document.querySelector<HTMLImageElement>(selector)?.src;
+    if (src) return src;
+  }
+
+  return "";
+}
+
 export function findVideoElement(): HTMLVideoElement | null {
   return document.querySelector("video");
 }

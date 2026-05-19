@@ -68,6 +68,17 @@ describe("import/export merge", () => {
       })
     ).toEqual(data);
   });
+
+  it("preserves optional video channel metadata", () => {
+    const data = withLoops([loop("a", 10, 15, "first")]);
+    data.videos[videoId].channelTitle = "Test Channel";
+    data.videos[videoId].channelAvatarUrl = "https://example.com/avatar.jpg";
+
+    expect(parseImportPayload(data).videos[videoId]).toMatchObject({
+      channelTitle: "Test Channel",
+      channelAvatarUrl: "https://example.com/avatar.jpg"
+    });
+  });
 });
 
 function withLoops(loops: Loop[]): PhraseLoopData {
