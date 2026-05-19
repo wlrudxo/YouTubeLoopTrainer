@@ -29,6 +29,19 @@
   justify-content: space-between;
 }
 
+.phraseloop-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phraseloop-progress-time {
+  color: #64748b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .phraseloop-title {
   font-weight: 700;
 }

@@ -124,6 +124,8 @@ function mountOrRenderPanel(): void {
       setA,
       setB,
       save: () => void saveDraftLoop(),
+      saveProgress,
+      goProgress,
       updateDraftLabel,
       startLoop,
       stopLoop,
@@ -288,6 +290,44 @@ function scheduleRequestedLoopStart(videoId: string, attempt = 0): void {
 
 function stopLoop(): void {
   loopEngine?.stop();
+}
+
+async function saveProgress(): Promise<void> {
+  if (!state.videoId) return;
+
+  const video = findVideoElement();
+  if (!video) {
+    setMessage("Could not find the YouTube video.");
+    render();
+    return;
+  }
+
+  state.video = await storage.saveProgress(state.videoId, video.currentTime, new Date().toISOString());
+  setMessage("Progress saved.", 1600);
+  debug.log("progress", "saved progress", { videoId: state.videoId, time: video.currentTime });
+  render();
+}
+
+function goProgress(): void {
+  const progress = state.video?.progress;
+  if (!progress) {
+    setMessage("No saved progress.");
+    render();
+    return;
+  }
+
+  const video = findVideoElement();
+  if (!video) {
+    setMessage("Could not find the YouTube video.");
+    render();
+    return;
+  }
+
+  loopEngine?.stop();
+  video.currentTime = progress.time;
+  setMessage("Progress loaded.", 1400);
+  debug.log("progress", "loaded progress", { videoId: state.videoId, time: progress.time });
+  render();
 }
 
 async function renameLoop(loop: Loop, nextLabel: string): Promise<void> {

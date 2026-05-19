@@ -14,6 +14,10 @@ export type VideoLoops = {
   channelTitle?: string;
   channelAvatarUrl?: string;
   url: string;
+  progress?: {
+    time: number;
+    updatedAt: string;
+  };
   loops: Loop[];
 };
 

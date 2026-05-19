@@ -79,6 +79,19 @@ describe("import/export merge", () => {
       channelAvatarUrl: "https://example.com/avatar.jpg"
     });
   });
+
+  it("preserves optional video progress", () => {
+    const data = withLoops([loop("a", 10, 15, "first")]);
+    data.videos[videoId].progress = {
+      time: 42.5,
+      updatedAt: "2026-05-19T12:30:00.000Z"
+    };
+
+    expect(parseImportPayload(data).videos[videoId].progress).toEqual({
+      time: 42.5,
+      updatedAt: "2026-05-19T12:30:00.000Z"
+    });
+  });
 });
 
 function withLoops(loops: Loop[]): PhraseLoopData {

@@ -107,11 +107,21 @@ function cloneData(data: PhraseLoopData): PhraseLoopData {
           title: video.title,
           ...(video.channelTitle ? { channelTitle: video.channelTitle } : {}),
           ...(video.channelAvatarUrl ? { channelAvatarUrl: video.channelAvatarUrl } : {}),
+          ...(video.progress ? { progress: cloneProgress(video.progress) } : {}),
           url: video.url,
           loops: video.loops.map(cloneLoop).sort((a, b) => a.start - b.start)
         }
       ])
     )
+  };
+}
+
+function cloneProgress(progress: VideoLoops["progress"]): VideoLoops["progress"] {
+  if (!progress) return undefined;
+
+  return {
+    time: progress.time,
+    updatedAt: progress.updatedAt
   };
 }
 
@@ -139,10 +149,17 @@ function isVideoLoops(value: unknown): value is VideoLoops {
   if (typeof value.title !== "string") return false;
   if ("channelTitle" in value && typeof value.channelTitle !== "string" && value.channelTitle !== undefined) return false;
   if ("channelAvatarUrl" in value && typeof value.channelAvatarUrl !== "string" && value.channelAvatarUrl !== undefined) return false;
+  if ("progress" in value && value.progress !== undefined && !isProgress(value.progress)) return false;
   if (typeof value.url !== "string") return false;
   if (!Array.isArray(value.loops)) return false;
 
   return value.loops.every(isLoop);
+}
+
+function isProgress(value: unknown): value is NonNullable<VideoLoops["progress"]> {
+  if (!isRecord(value)) return false;
+
+  return typeof value.time === "number" && typeof value.updatedAt === "string";
 }
 
 function isLoop(value: unknown): value is Loop {

@@ -110,7 +110,8 @@ function createVideoButton(video: VideoLoops, selected: boolean): HTMLElement {
 
   const title = element("span", "video-title", getVideoTitle(video));
   const channel = element("span", "video-channel", video.channelTitle || "Unknown channel");
-  const meta = element("span", "video-meta", `${video.loops.length} loops · ${formatMinuteFromMs(getLatestUpdatedAt(video))}`);
+  const progress = video.progress ? ` · progress ${formatTime(video.progress.time)}` : "";
+  const meta = element("span", "video-meta", `${video.loops.length} loops · ${formatMinuteFromMs(getLatestUpdatedAt(video))}${progress}`);
   text.append(title, channel, meta);
 
   button.append(createAvatar(video, "small"), text);
@@ -124,6 +125,7 @@ function createVideoInfo(video: VideoLoops): HTMLElement {
   info.append(element("h2", "detail-title", getVideoTitle(video)));
   info.append(element("div", "video-meta", `${video.channelTitle || "Unknown channel"} · ${video.videoId}`));
   info.append(element("div", "video-meta", `${video.loops.length} loops · updated ${formatMinuteFromMs(getLatestUpdatedAt(video))}`));
+  info.append(element("div", "video-meta", `Progress: ${formatProgress(video)}`));
   return info;
 }
 
@@ -138,6 +140,14 @@ function createVideoActions(video: VideoLoops): HTMLElement {
     void chrome.tabs.create({ url: getVideoUrl(video) });
   });
 
+  const progressButton = document.createElement("button");
+  progressButton.type = "button";
+  progressButton.textContent = "Open Progress";
+  progressButton.disabled = !video.progress;
+  progressButton.addEventListener("click", () => {
+    void chrome.tabs.create({ url: getProgressUrl(video) });
+  });
+
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.textContent = "Delete Video";
@@ -146,7 +156,7 @@ function createVideoActions(video: VideoLoops): HTMLElement {
     void deleteVideo(video);
   });
 
-  actions.append(openButton, deleteButton);
+  actions.append(openButton, progressButton, deleteButton);
   return actions;
 }
 
@@ -278,8 +288,23 @@ function getLoopUrl(video: VideoLoops, loop: Loop): string {
   return url.toString();
 }
 
+function getProgressUrl(video: VideoLoops): string {
+  const url = new URL(getVideoUrl(video));
+  if (video.progress) {
+    url.searchParams.set("t", `${Math.floor(video.progress.time)}s`);
+  }
+  url.searchParams.delete(LOOP_URL_PARAM);
+  return url.toString();
+}
+
 function getVideoUrl(video: VideoLoops): string {
   return video.url || `https://www.youtube.com/watch?v=${video.videoId}`;
+}
+
+function formatProgress(video: VideoLoops): string {
+  if (!video.progress) return "not saved";
+
+  return `${formatTime(video.progress.time)} · ${formatMinute(video.progress.updatedAt)}`;
 }
 
 function formatMinute(value: string): string {

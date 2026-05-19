@@ -19,6 +19,8 @@ export type PanelActions = {
   setA: () => void;
   setB: () => void;
   save: () => void;
+  saveProgress: () => void;
+  goProgress: () => void;
   updateDraftLabel: (label: string) => void;
   startLoop: (loop: Loop) => void;
   stopLoop: () => void;
@@ -71,10 +73,31 @@ export class PhraseLoopPanel {
     const header = element("div", "phraseloop-header");
     header.append(element("div", "phraseloop-title", `PhraseLoop ${APP_BUILD}`));
 
+    const headerActions = element("div", "phraseloop-header-actions");
+    if (video?.progress) {
+      const progressTime = element("span", "phraseloop-progress-time", formatMinute(video.progress.updatedAt));
+      progressTime.title = `Saved progress: ${formatTime(video.progress.time)}`;
+      headerActions.append(progressTime);
+    }
+
+    const saveProgressButton = button("💾", "Save progress");
+    saveProgressButton.className = "phraseloop-icon-button";
+    saveProgressButton.setAttribute("aria-label", "Save progress");
+    saveProgressButton.addEventListener("click", this.actions.saveProgress);
+    headerActions.append(saveProgressButton);
+
+    const goProgressButton = button("↪", "Go to saved progress");
+    goProgressButton.className = "phraseloop-icon-button";
+    goProgressButton.disabled = !video?.progress;
+    goProgressButton.setAttribute("aria-label", "Go to saved progress");
+    goProgressButton.addEventListener("click", this.actions.goProgress);
+    headerActions.append(goProgressButton);
+
     const collapseButton = button(collapsed ? "+" : "-", collapsed ? "Expand" : "Collapse");
     collapseButton.className = "phraseloop-icon-button";
     collapseButton.addEventListener("click", () => this.actions.setCollapsed(!collapsed));
-    header.append(collapseButton);
+    headerActions.append(collapseButton);
+    header.append(headerActions);
     this.root.append(header);
 
     if (collapsed) return;

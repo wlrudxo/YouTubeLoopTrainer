@@ -75,6 +75,16 @@ export async function deleteVideo(videoId: string): Promise<void> {
   await writeData(data);
 }
 
+export async function saveProgress(videoId: string, time: number, updatedAt: string): Promise<VideoLoops | null> {
+  const data = await readData();
+  const video = data.videos[videoId];
+  if (!video) return null;
+
+  video.progress = { time, updatedAt };
+  await writeData(data);
+  return video;
+}
+
 export async function deleteLoop(videoId: string, loopId: string): Promise<VideoLoops | null> {
   const data = await readData();
   const video = data.videos[videoId];

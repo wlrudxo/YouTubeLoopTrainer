@@ -31,6 +31,7 @@ export function ensureVideo(data: PhraseLoopData, videoId: string, title: string
     channelTitle: metadata.channelTitle,
     channelAvatarUrl: metadata.channelAvatarUrl,
     url,
+    progress: undefined,
     loops: []
   };
 
