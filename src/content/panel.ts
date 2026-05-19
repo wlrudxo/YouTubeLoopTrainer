@@ -85,7 +85,6 @@ export class PhraseLoopPanel {
     this.root.append(markerRow);
 
     const labelWrap = element("label", "phraseloop-label-wrap");
-    labelWrap.append(element("span", "phraseloop-field-label", "Name"));
     const labelRow = element("div", "phraseloop-label-row");
     const labelInput = document.createElement("textarea");
     labelInput.className = LABEL_INPUT_CLASS;
@@ -146,7 +145,8 @@ export class PhraseLoopPanel {
     main.className = "phraseloop-loop-main";
     main.innerHTML = `<span class="phraseloop-play">&gt;</span><span class="phraseloop-loop-label"></span><span class="phraseloop-loop-time"></span>`;
     main.querySelector(".phraseloop-loop-label")!.textContent = loop.label;
-    main.querySelector(".phraseloop-loop-time")!.textContent = `${formatTime(loop.start)} - ${formatTime(loop.end)}`;
+    main.querySelector(".phraseloop-loop-time")!.textContent =
+      `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.updatedAt)}`;
     main.addEventListener("click", () => this.actions.startLoop(loop));
     row.append(main);
 
@@ -216,4 +216,19 @@ function button(text: string, title: string): HTMLButtonElement {
   node.textContent = text;
   node.title = title;
   return node;
+}
+
+function formatMinute(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--/-- --:--";
+
+  return [
+    String(date.getMonth() + 1).padStart(2, "0"),
+    "/",
+    String(date.getDate()).padStart(2, "0"),
+    " ",
+    String(date.getHours()).padStart(2, "0"),
+    ":",
+    String(date.getMinutes()).padStart(2, "0")
+  ].join("");
 }

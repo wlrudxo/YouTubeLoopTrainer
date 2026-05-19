@@ -51,6 +51,7 @@ let loopEngine: LoopEngine | null = null;
 let unregisterShortcuts: (() => void) | null = null;
 let clearNavigationListener: (() => void) | null = null;
 let highlightTimer: number | null = null;
+let messageTimer: number | null = null;
 let labelRefreshToken = 0;
 let captionCollector: VisibleCaptionCollector | null = null;
 let collectedCaptionLabel = "";
@@ -232,7 +233,7 @@ async function saveDraftLoop(): Promise<void> {
   collectedCaptionLabel = "";
   captionCollector?.reset();
   state.highlightedLoopId = loop.id;
-  setMessage("Loop saved.");
+  setMessage("Loop saved.", 1800);
   scheduleHighlightClear();
   render();
 }
@@ -349,8 +350,23 @@ function getFreshCaptionLabel(): string | null {
   return getPreferredCaptionLabel();
 }
 
-function setMessage(message: string): void {
+function setMessage(message: string, clearAfterMs?: number): void {
+  if (messageTimer !== null) {
+    window.clearTimeout(messageTimer);
+    messageTimer = null;
+  }
+
   state.message = message;
+
+  if (message && clearAfterMs !== undefined) {
+    messageTimer = window.setTimeout(() => {
+      if (state.message === message) {
+        state.message = "";
+        render();
+      }
+      messageTimer = null;
+    }, clearAfterMs);
+  }
 }
 
 function scheduleHighlightClear(): void {
