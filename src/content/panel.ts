@@ -202,14 +202,27 @@ export class PhraseLoopPanel {
   }
 
   private renderDebugRecords(records: DebugRecord[]): HTMLElement {
+    const outer = element("div", "phraseloop-debug-wrap");
+
+    const tools = element("div", "phraseloop-debug-tools");
+    const count = element("span", "phraseloop-debug-count", `Showing ${records.length} records`);
+    const copyButton = button("Copy Debug", "Copy all debug records");
+    copyButton.className = "phraseloop-text-button";
+    copyButton.addEventListener("click", () => {
+      void copyDebugRecords(records);
+    });
+    tools.append(count, copyButton);
+    outer.append(tools);
+
     const wrap = element("div", "phraseloop-debug");
 
     if (records.length === 0) {
       wrap.append(element("div", "phraseloop-empty", "No debug records yet."));
-      return wrap;
+      outer.append(wrap);
+      return outer;
     }
 
-    for (const record of records.slice(0, 12)) {
+    for (const record of records) {
       const item = element("div", "phraseloop-debug-record");
       const summary = element("div", "phraseloop-debug-summary", `${record.time} ${record.area}: ${record.message}`);
       item.append(summary);
@@ -222,7 +235,8 @@ export class PhraseLoopPanel {
       wrap.append(item);
     }
 
-    return wrap;
+    outer.append(wrap);
+    return outer;
   }
 }
 
@@ -253,4 +267,15 @@ function formatDetails(details: unknown): string {
   } catch {
     return String(details);
   }
+}
+
+async function copyDebugRecords(records: DebugRecord[]): Promise<void> {
+  const text = records
+    .map((record) => {
+      const details = record.details === undefined ? "" : `\n${formatDetails(record.details)}`;
+      return `${record.time} ${record.area}: ${record.message}${details}`;
+    })
+    .join("\n\n");
+
+  await navigator.clipboard.writeText(text);
 }

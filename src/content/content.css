@@ -180,14 +180,30 @@
   margin-top: 10px;
 }
 
+.phraseloop-debug-wrap {
+  margin-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}
+
+.phraseloop-debug-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.phraseloop-debug-count {
+  color: #64748b;
+  font-size: 12px;
+}
+
 .phraseloop-debug {
   display: grid;
   gap: 6px;
-  margin-top: 8px;
-  max-height: 260px;
+  max-height: 520px;
   overflow: auto;
-  border-top: 1px solid #e2e8f0;
-  padding-top: 8px;
 }
 
 .phraseloop-debug-record {
