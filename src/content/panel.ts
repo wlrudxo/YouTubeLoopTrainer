@@ -160,8 +160,9 @@ export class PhraseLoopPanel {
     main.addEventListener("click", () => this.actions.startLoop(loop));
     row.append(main);
 
-    const renameButton = button("Rename", `Rename ${loop.label}`);
-    renameButton.className = "phraseloop-text-button";
+    const renameButton = button("✎", `Rename ${loop.label}`);
+    renameButton.className = "phraseloop-icon-button";
+    renameButton.setAttribute("aria-label", `Rename ${loop.label}`);
     renameButton.addEventListener("click", () => this.renderRenameRow(row, loop));
     row.append(renameButton);
 
