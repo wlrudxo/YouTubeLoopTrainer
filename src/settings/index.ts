@@ -5,7 +5,12 @@ import "./settings.css";
 
 const exportButton = document.querySelector<HTMLButtonElement>("#exportButton");
 const importFile = document.querySelector<HTMLInputElement>("#importFile");
+const libraryButton = document.querySelector<HTMLButtonElement>("#libraryButton");
 const statusEl = document.querySelector<HTMLDivElement>("#status");
+
+libraryButton?.addEventListener("click", () => {
+  window.location.href = chrome.runtime.getURL("library/index.html");
+});
 
 exportButton?.addEventListener("click", () => {
   void exportData();
