@@ -16,6 +16,18 @@ export function findVideoElement(): HTMLVideoElement | null {
   return document.querySelector("video");
 }
 
+export function ensureCaptionsEnabled(): boolean {
+  const button = document.querySelector<HTMLButtonElement>(".ytp-subtitles-button");
+  if (!button) return false;
+
+  const pressed = button.getAttribute("aria-pressed");
+  const enabled = pressed === "true" || button.classList.contains("ytp-button-active");
+  if (enabled) return true;
+
+  button.click();
+  return true;
+}
+
 export function findPanelTarget(): Element | null {
   return document.querySelector("#secondary") ?? document.querySelector("#below");
 }

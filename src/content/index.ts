@@ -12,7 +12,15 @@ import { LoopEngine } from "./loopEngine";
 import { PhraseLoopPanel, type PanelState } from "./panel";
 import { registerShortcuts } from "./shortcuts";
 import { VisibleCaptionCollector } from "./visibleCaptionCollector";
-import { findPanelTarget, findVideoElement, getVideoIdFromUrl, getVideoTitle, getWatchUrl, onYouTubeNavigation } from "./youtube";
+import {
+  ensureCaptionsEnabled,
+  findPanelTarget,
+  findVideoElement,
+  getVideoIdFromUrl,
+  getVideoTitle,
+  getWatchUrl,
+  onYouTubeNavigation
+} from "./youtube";
 
 type AppState = {
   videoId: string | null;
@@ -30,7 +38,7 @@ const state: AppState = {
   draft: createEmptyDraft(),
   message: "",
   highlightedLoopId: null,
-  collapsed: false,
+  collapsed: true,
   debugExpanded: false
 };
 
@@ -259,6 +267,12 @@ async function deleteLoop(loop: Loop): Promise<void> {
 
 function setCollapsed(collapsed: boolean): void {
   state.collapsed = collapsed;
+  if (!collapsed) {
+    window.setTimeout(() => {
+      const ok = ensureCaptionsEnabled();
+      debug.log("captions", ok ? "enabled captions on panel expand" : "caption button not found on panel expand");
+    }, 0);
+  }
   render();
 }
 
