@@ -71,15 +71,7 @@ function createVideoRow(video: VideoLoops): HTMLElement {
 
   body.append(title, channel, meta);
 
-  const openButton = document.createElement("button");
-  openButton.type = "button";
-  openButton.className = "icon-button";
-  openButton.textContent = "↗";
-  openButton.title = `Open ${getVideoTitle(video)}`;
-  openButton.setAttribute("aria-label", `Open ${getVideoTitle(video)}`);
-  openButton.addEventListener("click", () => openVideo(video));
-
-  row.append(body, openButton);
+  row.append(body);
   return row;
 }
 
