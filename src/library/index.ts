@@ -7,14 +7,17 @@ const summaryEl = document.querySelector<HTMLParagraphElement>("#summary");
 const searchInput = document.querySelector<HTMLInputElement>("#searchInput");
 const settingsButton = document.querySelector<HTMLButtonElement>("#settingsButton");
 const videoList = document.querySelector<HTMLElement>("#videoList");
+const detailPanel = document.querySelector<HTMLElement>("#detailPanel");
 
 let videos: VideoLoops[] = [];
+let selectedVideoId: string | null = null;
 
 settingsButton?.addEventListener("click", () => {
   void chrome.runtime.openOptionsPage();
 });
 
 searchInput?.addEventListener("input", () => {
+  ensureSelectedVideo();
   render();
 });
 
@@ -23,76 +26,103 @@ void load();
 async function load(): Promise<void> {
   const data = await storage.readData();
   videos = Object.values(data.videos).sort(compareVideos);
+  ensureSelectedVideo();
   render();
 }
 
 function render(): void {
-  if (!summaryEl || !videoList) return;
+  if (!summaryEl || !videoList || !detailPanel) return;
 
-  const query = normalize(searchInput?.value ?? "");
-  const filtered = query ? videos.filter((video) => matchesVideo(video, query)) : videos;
   const totalLoops = videos.reduce((sum, video) => sum + video.loops.length, 0);
+  const filteredVideos = getFilteredVideos();
+  const selectedVideo = videos.find((video) => video.videoId === selectedVideoId) ?? filteredVideos[0] ?? null;
+
+  if (selectedVideo) {
+    selectedVideoId = selectedVideo.videoId;
+  }
 
   summaryEl.textContent = `${videos.length} videos · ${totalLoops} loops`;
-  videoList.innerHTML = "";
+  renderVideoList(videoList, filteredVideos);
+  renderDetail(detailPanel, selectedVideo);
+}
 
-  if (filtered.length === 0) {
-    videoList.append(createEmpty(videos.length === 0 ? "No saved videos yet." : "No matching videos."));
+function renderVideoList(target: HTMLElement, filteredVideos: VideoLoops[]): void {
+  target.innerHTML = "";
+
+  if (filteredVideos.length === 0) {
+    target.append(createEmpty(videos.length === 0 ? "No saved videos yet." : "No matching videos."));
     return;
   }
 
-  for (const video of filtered) {
-    videoList.append(createVideoCard(video));
+  for (const video of filteredVideos) {
+    target.append(createVideoButton(video, video.videoId === selectedVideoId));
   }
 }
 
-function createVideoCard(video: VideoLoops): HTMLElement {
-  const card = document.createElement("article");
-  card.className = "video-card";
+function renderDetail(target: HTMLElement, video: VideoLoops | null): void {
+  target.innerHTML = "";
 
-  const header = document.createElement("div");
-  header.className = "video-header";
-  header.append(createAvatar(video), createVideoInfo(video), createVideoActions(video));
-  card.append(header);
+  if (!video) {
+    target.append(createEmpty("Select a video to manage loops."));
+    return;
+  }
 
-  const loops = document.createElement("div");
-  loops.className = "loop-list";
+  const header = document.createElement("section");
+  header.className = "detail-header";
+  header.append(createAvatar(video, "large"), createVideoInfo(video), createVideoActions(video));
+  target.append(header);
 
-  if (video.loops.length === 0) {
-    loops.append(createEmpty("No loops saved for this video."));
+  const loopsHeader = document.createElement("div");
+  loopsHeader.className = "loops-header";
+  loopsHeader.append(element("h2", "", "Loops"));
+  loopsHeader.append(element("span", "loop-count", `${video.loops.length} saved`));
+  target.append(loopsHeader);
+
+  const list = document.createElement("section");
+  list.className = "loop-list";
+
+  const query = normalize(searchInput?.value ?? "");
+  const loops = query ? video.loops.filter((loop) => normalize(loop.label).includes(query)) : video.loops;
+
+  if (loops.length === 0) {
+    list.append(createEmpty(video.loops.length === 0 ? "No loops saved for this video." : "No matching loops."));
   } else {
-    for (const loop of video.loops) {
-      loops.append(createLoopRow(video, loop));
+    for (const loop of loops) {
+      list.append(createLoopRow(video, loop));
     }
   }
 
-  card.append(loops);
-  return card;
+  target.append(list);
+}
+
+function createVideoButton(video: VideoLoops, selected: boolean): HTMLElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `video-button${selected ? " is-selected" : ""}`;
+  button.addEventListener("click", () => {
+    selectedVideoId = video.videoId;
+    render();
+  });
+
+  const text = document.createElement("span");
+  text.className = "video-button-text";
+
+  const title = element("span", "video-title", getVideoTitle(video));
+  const channel = element("span", "video-channel", video.channelTitle || "Unknown channel");
+  const meta = element("span", "video-meta", `${video.loops.length} loops · ${formatMinuteFromMs(getLatestUpdatedAt(video))}`);
+  text.append(title, channel, meta);
+
+  button.append(createAvatar(video, "small"), text);
+  return button;
 }
 
 function createVideoInfo(video: VideoLoops): HTMLElement {
   const info = document.createElement("div");
   info.className = "video-info";
 
-  const title = document.createElement("textarea");
-  title.className = "video-title-input";
-  title.rows = 2;
-  title.value = getVideoTitle(video);
-  title.addEventListener("blur", () => {
-    void renameVideo(video, title.value);
-  });
-  title.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      title.blur();
-    }
-  });
-
-  const meta = document.createElement("div");
-  meta.className = "video-meta";
-  meta.textContent = `${video.channelTitle || "Unknown channel"} · ${video.loops.length} loops`;
-
-  info.append(title, meta);
+  info.append(element("h2", "detail-title", getVideoTitle(video)));
+  info.append(element("div", "video-meta", `${video.channelTitle || "Unknown channel"} · ${video.videoId}`));
+  info.append(element("div", "video-meta", `${video.loops.length} loops · updated ${formatMinuteFromMs(getLatestUpdatedAt(video))}`));
   return info;
 }
 
@@ -102,14 +132,14 @@ function createVideoActions(video: VideoLoops): HTMLElement {
 
   const openButton = document.createElement("button");
   openButton.type = "button";
-  openButton.textContent = "Open";
+  openButton.textContent = "Open Video";
   openButton.addEventListener("click", () => {
-    void chrome.tabs.create({ url: video.url || `https://www.youtube.com/watch?v=${video.videoId}` });
+    void chrome.tabs.create({ url: getVideoUrl(video) });
   });
 
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
-  deleteButton.textContent = "Delete";
+  deleteButton.textContent = "Delete Video";
   deleteButton.className = "danger";
   deleteButton.addEventListener("click", () => {
     void deleteVideo(video);
@@ -120,7 +150,7 @@ function createVideoActions(video: VideoLoops): HTMLElement {
 }
 
 function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
-  const row = document.createElement("div");
+  const row = document.createElement("article");
   row.className = "loop-row";
 
   const label = document.createElement("textarea");
@@ -144,11 +174,11 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
   const tools = document.createElement("div");
   tools.className = "loop-tools";
 
-  const playButton = document.createElement("button");
-  playButton.type = "button";
-  playButton.textContent = "Open";
-  playButton.addEventListener("click", () => {
-    void chrome.tabs.create({ url: `${video.url || `https://www.youtube.com/watch?v=${video.videoId}`}&t=${Math.floor(loop.start)}s` });
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.textContent = "Open";
+  openButton.addEventListener("click", () => {
+    void chrome.tabs.create({ url: getLoopUrl(video, loop) });
   });
 
   const deleteButton = document.createElement("button");
@@ -159,14 +189,14 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
     void deleteLoop(video, loop);
   });
 
-  tools.append(playButton, deleteButton);
+  tools.append(openButton, deleteButton);
   row.append(label, meta, tools);
   return row;
 }
 
-function createAvatar(video: VideoLoops): HTMLElement {
+function createAvatar(video: VideoLoops, size: "small" | "large"): HTMLElement {
   const wrap = document.createElement("div");
-  wrap.className = "video-avatar";
+  wrap.className = `video-avatar is-${size}`;
 
   if (video.channelAvatarUrl) {
     const image = document.createElement("img");
@@ -188,15 +218,11 @@ function createEmpty(message: string): HTMLElement {
   return empty;
 }
 
-async function renameVideo(video: VideoLoops, title: string): Promise<void> {
-  await storage.renameVideo(video.videoId, title);
-  await load();
-}
-
 async function deleteVideo(video: VideoLoops): Promise<void> {
   if (!window.confirm(`Delete "${getVideoTitle(video)}" and all ${video.loops.length} loops?`)) return;
 
   await storage.deleteVideo(video.videoId);
+  selectedVideoId = null;
   await load();
 }
 
@@ -210,6 +236,21 @@ async function deleteLoop(video: VideoLoops, loop: Loop): Promise<void> {
 
   await storage.deleteLoop(video.videoId, loop.id);
   await load();
+}
+
+function getFilteredVideos(): VideoLoops[] {
+  const query = normalize(searchInput?.value ?? "");
+  return query ? videos.filter((video) => matchesVideo(video, query)) : videos;
+}
+
+function ensureSelectedVideo(): void {
+  const filtered = getFilteredVideos();
+
+  if (selectedVideoId && filtered.some((video) => video.videoId === selectedVideoId)) {
+    return;
+  }
+
+  selectedVideoId = filtered[0]?.videoId ?? null;
 }
 
 function matchesVideo(video: VideoLoops, query: string): boolean {
@@ -229,10 +270,25 @@ function getLatestUpdatedAt(video: VideoLoops): number {
   return Math.max(0, ...video.loops.map((loop) => Date.parse(loop.updatedAt) || 0));
 }
 
-function formatMinute(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--/-- --:--";
+function getLoopUrl(video: VideoLoops, loop: Loop): string {
+  const url = new URL(getVideoUrl(video));
+  url.searchParams.set("t", `${Math.floor(loop.start)}s`);
+  return url.toString();
+}
 
+function getVideoUrl(video: VideoLoops): string {
+  return video.url || `https://www.youtube.com/watch?v=${video.videoId}`;
+}
+
+function formatMinute(value: string): string {
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? "--/-- --:--" : formatMinuteFromMs(time);
+}
+
+function formatMinuteFromMs(value: number): string {
+  if (!value) return "--/-- --:--";
+
+  const date = new Date(value);
   return [
     String(date.getMonth() + 1).padStart(2, "0"),
     "/",
@@ -250,4 +306,11 @@ function getVideoTitle(video: VideoLoops): string {
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = ""): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  return node;
 }
