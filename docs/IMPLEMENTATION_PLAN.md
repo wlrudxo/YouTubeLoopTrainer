@@ -259,6 +259,7 @@ Responsibilities:
 Responsibilities:
 
 - Read browser-exposed YouTube `TextTrack` entries from the current `HTMLVideoElement`.
+- Read YouTube timedtext caption track URLs from the page's initial player response as a fallback.
 - Prefer English caption/subtitle tracks.
 - Allow auto-generated English caption tracks.
 - Load cues by temporarily setting disabled tracks to `hidden` when needed.

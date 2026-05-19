@@ -85,6 +85,7 @@ Draft label dirty flag:
 Caption label constraints:
 
 - Use browser-exposed YouTube `TextTrack` cues.
+- If `TextTrack` cues are unavailable, read YouTube timedtext caption data from the current page's player response.
 - Prefer English tracks.
 - Auto-generated English captions are acceptable.
 - If no suitable cue text is available, keep the time-range fallback.
