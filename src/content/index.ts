@@ -183,12 +183,10 @@ function setB(): void {
   loopEngine?.setVideo(video);
   state.draft.markerB = video.currentTime;
   debug.log("draft", "set markerB", { currentTime: video.currentTime });
+  collectedCaptionLabel = captionCollector?.stop() ?? "";
   const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
-  if (validation.ok) {
-    collectedCaptionLabel = captionCollector?.stop() ?? "";
-  } else {
-    collectedCaptionLabel = "";
-    debug.log("collector", "kept running after invalid markerB", validation);
+  if (!validation.ok) {
+    debug.log("collector", "stopped after invalid markerB", validation);
   }
   void refreshDefaultLabel();
   setMessage("");
