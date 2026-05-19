@@ -19,17 +19,19 @@ type TranscriptResponse = {
 export async function getTranscriptLabelForRange(start: number, end: number, debug?: DebugLogger): Promise<string | null> {
   const apiKey = findInnertubeApiKey();
   const params = findTranscriptParams(debug);
+  const clientContext = findInnertubeClientContext();
 
   debug?.log("transcript", "transcript lookup context", {
     hasApiKey: Boolean(apiKey),
     paramsCount: params.length,
-    paramsSources: params.map((item) => item.source)
+    paramsSources: params.map((item) => item.source),
+    clientContext
   });
 
   if (!apiKey || params.length === 0) return null;
 
   for (const item of params) {
-    const label = await fetchTranscriptLabel(apiKey, item, start, end, debug);
+    const label = await fetchTranscriptLabel(apiKey, clientContext, item, start, end, debug);
     if (label) return label;
   }
 
@@ -38,6 +40,7 @@ export async function getTranscriptLabelForRange(start: number, end: number, deb
 
 async function fetchTranscriptLabel(
   apiKey: string,
+  clientContext: InnertubeClientContext,
   params: TranscriptParams,
   start: number,
   end: number,
@@ -49,17 +52,17 @@ async function fetchTranscriptLabel(
       credentials: "include",
       headers: {
         "content-type": "application/json",
-        "x-youtube-client-name": "1",
-        "x-youtube-client-version": "2.20240519.01.00"
+        "x-youtube-client-name": clientContext.clientHeaderName,
+        "x-youtube-client-version": clientContext.clientVersion
       },
       body: JSON.stringify({
         context: {
           client: {
-            clientName: "WEB",
-            clientVersion: "2.20240519.01.00",
-            hl: "en",
-            gl: "US",
-            visitorData: findVisitorData()
+            clientName: clientContext.clientName,
+            clientVersion: clientContext.clientVersion,
+            hl: clientContext.hl,
+            gl: clientContext.gl,
+            visitorData: clientContext.visitorData
           }
         },
         params: params.params
@@ -71,7 +74,7 @@ async function fetchTranscriptLabel(
       status: response.status,
       ok: response.ok,
       bodyLength: text.length,
-      head: text.slice(0, 120)
+      head: text.slice(0, 240)
     });
 
     if (!response.ok || text.trim().length === 0) return null;
@@ -171,10 +174,47 @@ function extractParamsNearTranscriptEndpoints(text: string): string[] {
   let match: RegExpExecArray | null;
 
   while ((match = endpointPattern.exec(text))) {
-    if (match[1]) params.push(match[1]);
+    if (match[1]) params.push(decodeJsonStringLiteral(match[1]));
   }
 
   return params;
+}
+
+type InnertubeClientContext = {
+  clientName: string;
+  clientHeaderName: string;
+  clientVersion: string;
+  hl: string;
+  gl: string;
+  visitorData?: string;
+};
+
+function findInnertubeClientContext(): InnertubeClientContext {
+  const clientName = readYtConfigString("INNERTUBE_CLIENT_NAME") ?? "WEB";
+  return {
+    clientName,
+    clientHeaderName: inferClientHeaderName(clientName),
+    clientVersion: readYtConfigString("INNERTUBE_CLIENT_VERSION") ?? "2.20240519.01.00",
+    hl: readYtConfigString("HL") ?? "en",
+    gl: readYtConfigString("GL") ?? "US",
+    visitorData: findVisitorData()
+  };
+}
+
+function inferClientHeaderName(clientName: string): string {
+  if (clientName === "MWEB") return "2";
+  if (clientName === "ANDROID") return "3";
+  if (clientName === "IOS") return "5";
+  if (clientName === "TVHTML5") return "7";
+  return "1";
+}
+
+function decodeJsonStringLiteral(value: string): string {
+  try {
+    return JSON.parse(`"${value.replace(/"/g, "\\\"")}"`) as string;
+  } catch {
+    return value;
+  }
 }
 
 function findTranscriptParamsInJson(root: unknown, source: string): TranscriptParams[] {
