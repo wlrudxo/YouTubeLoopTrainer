@@ -260,6 +260,7 @@ Responsibilities:
 
 - Read browser-exposed YouTube `TextTrack` entries from the current `HTMLVideoElement`.
 - Read YouTube timedtext caption track URLs from the page's initial player response as a fallback.
+- Retry caption track discovery through YouTube Innertube player clients when watch-page timedtext URLs fail.
 - Prefer English caption/subtitle tracks.
 - Allow auto-generated English caption tracks.
 - Load cues by temporarily setting disabled tracks to `hidden` when needed.

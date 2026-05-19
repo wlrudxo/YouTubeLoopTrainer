@@ -99,25 +99,29 @@ function cueToText(cue: TextTrackCue): string {
 }
 
 async function getTimedTextCaptionLabel(start: number, end: number, debug?: DebugLogger): Promise<string | null> {
-  const captionTracks = findCaptionTracks(debug);
-  debug?.log("captions", "timedtext tracks found", {
-    count: captionTracks.length,
-    tracks: captionTracks.map(describeTimedTextTrack)
-  });
+  const captionTracks = await findCaptionTracks(debug);
 
-  const captionTrack = chooseTimedTextTrack(captionTracks);
-  if (!captionTrack) {
-    debug?.log("captions", "no timedtext caption track selected");
-    return null;
+  for (const group of captionTracks) {
+    debug?.log("captions", `timedtext tracks found (${group.source})`, {
+      count: group.tracks.length,
+      tracks: group.tracks.map(describeTimedTextTrack)
+    });
+
+    const captionTrack = chooseTimedTextTrack(group.tracks);
+    if (!captionTrack) {
+      debug?.log("captions", `no timedtext caption track selected (${group.source})`);
+      continue;
+    }
+
+    debug?.log("captions", `selected timedtext track (${group.source})`, describeTimedTextTrack(captionTrack));
+
+    for (const format of ["json3", "srv3", "vtt"] as const) {
+      const label = await fetchTimedTextFormat(captionTrack, format, start, end, debug);
+      if (label) return label;
+    }
   }
 
-  debug?.log("captions", "selected timedtext track", describeTimedTextTrack(captionTrack));
-
-  for (const format of ["json3", "srv3", "vtt"] as const) {
-    const label = await fetchTimedTextFormat(captionTrack, format, start, end, debug);
-    if (label) return label;
-  }
-
+  debug?.log("captions", "all timedtext caption sources failed");
   return null;
 }
 
@@ -188,12 +192,28 @@ type TimedTextTrack = {
   };
 };
 
-function findCaptionTracks(debug?: DebugLogger): TimedTextTrack[] {
+type TimedTextTrackGroup = {
+  source: string;
+  tracks: TimedTextTrack[];
+};
+
+async function findCaptionTracks(debug?: DebugLogger): Promise<TimedTextTrackGroup[]> {
+  const groups: TimedTextTrackGroup[] = [];
   const playerResponse = findInitialPlayerResponse(debug);
   const tracks =
     playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
 
-  return Array.isArray(tracks) ? tracks.filter(isTimedTextTrack) : [];
+  if (Array.isArray(tracks)) {
+    groups.push({
+      source: "watch-page",
+      tracks: tracks.filter(isTimedTextTrack)
+    });
+  }
+
+  const innertubeGroups = await fetchInnertubeCaptionTrackGroups(debug);
+  groups.push(...innertubeGroups);
+
+  return groups.filter((group) => group.tracks.length > 0);
 }
 
 function chooseTimedTextTrack(tracks: TimedTextTrack[]): TimedTextTrack | null {
@@ -338,3 +358,121 @@ type PlayerResponse = {
     };
   };
 };
+
+type InnertubeClient = {
+  source: string;
+  clientName: string;
+  clientVersion: string;
+};
+
+const INNERTUBE_CLIENTS: InnertubeClient[] = [
+  { source: "innertube-web", clientName: "WEB", clientVersion: "2.20240519.01.00" },
+  { source: "innertube-mweb", clientName: "MWEB", clientVersion: "2.20240519.01.00" },
+  { source: "innertube-tv", clientName: "TVHTML5", clientVersion: "7.20240519.01.00" }
+];
+
+async function fetchInnertubeCaptionTrackGroups(debug?: DebugLogger): Promise<TimedTextTrackGroup[]> {
+  const videoId = new URL(window.location.href).searchParams.get("v");
+  if (!videoId) {
+    debug?.log("captions", "skip Innertube captions because videoId is missing");
+    return [];
+  }
+
+  const apiKey = findInnertubeApiKey();
+  const visitorData = findVisitorData();
+  debug?.log("captions", "Innertube context", {
+    videoId,
+    hasApiKey: Boolean(apiKey),
+    hasVisitorData: Boolean(visitorData)
+  });
+
+  if (!apiKey) return [];
+
+  const groups: TimedTextTrackGroup[] = [];
+
+  for (const client of INNERTUBE_CLIENTS) {
+    try {
+      const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+          "x-youtube-client-name": client.clientName,
+          "x-youtube-client-version": client.clientVersion
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: client.clientName,
+              clientVersion: client.clientVersion,
+              hl: "en",
+              gl: "US",
+              visitorData
+            }
+          },
+          videoId,
+          contentCheckOk: true,
+          racyCheckOk: true
+        })
+      });
+
+      const text = await response.text();
+      debug?.log("captions", `Innertube player response (${client.source})`, {
+        status: response.status,
+        ok: response.ok,
+        bodyLength: text.length,
+        head: text.slice(0, 80)
+      });
+
+      if (!response.ok || text.trim().length === 0) continue;
+
+      const playerResponse = JSON.parse(text) as PlayerResponse;
+      const tracks = playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+
+      groups.push({
+        source: client.source,
+        tracks: Array.isArray(tracks) ? tracks.filter(isTimedTextTrack) : []
+      });
+    } catch (error) {
+      debug?.log("captions", `Innertube player failed (${client.source})`, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  return groups;
+}
+
+function findInnertubeApiKey(): string | null {
+  const configKey = readYtConfigString("INNERTUBE_API_KEY");
+  if (configKey) return configKey;
+
+  for (const script of Array.from(document.scripts)) {
+    const text = script.textContent;
+    if (!text) continue;
+
+    const match = text.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/);
+    if (match?.[1]) return match[1];
+  }
+
+  return null;
+}
+
+function findVisitorData(): string | undefined {
+  const configVisitorData = readYtConfigString("VISITOR_DATA");
+  if (configVisitorData) return configVisitorData;
+
+  for (const script of Array.from(document.scripts)) {
+    const text = script.textContent;
+    if (!text) continue;
+
+    const match = text.match(/"VISITOR_DATA"\s*:\s*"([^"]+)"/);
+    if (match?.[1]) return match[1];
+  }
+
+  return undefined;
+}
+
+function readYtConfigString(key: string): string | null {
+  const config = (window as Window & { ytcfg?: { get?: (key: string) => unknown } }).ytcfg;
+  const value = config?.get?.(key);
+  return typeof value === "string" ? value : null;
+}
