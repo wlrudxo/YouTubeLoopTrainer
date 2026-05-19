@@ -68,18 +68,27 @@ Each saved loop must have a label.
 
 Requirements:
 
-- A default label is generated from the sorted time range.
-- Default format: `01:12.4 - 01:18.9`
+- If an English or auto-generated caption track is available, the default label should use the caption text that overlaps the sorted A-B range.
+- If caption text is unavailable, a default label is generated from the sorted time range.
+- Time fallback format: `01:12.4 - 01:18.9`
 - The label input is editable before save.
-- Empty or whitespace-only label input falls back to the default time-range label.
+- Empty or whitespace-only label input falls back to the generated default label, or the time-range label if no caption label is available.
 - After a successful save, A marker, B marker, label input, and label dirty state are cleared.
 
 Draft label dirty flag:
 
-- When both markers are present, PhraseLoop auto-populates the label input.
+- When both markers are present, PhraseLoop auto-populates the label input with caption text when possible, otherwise the time-range label.
 - As long as the user has not manually edited the label, marker changes update the label automatically.
 - Once the user edits the label, PhraseLoop preserves that custom label even if A or B changes.
 - The dirty flag resets after save.
+
+Caption label constraints:
+
+- Use browser-exposed YouTube `TextTrack` cues.
+- Prefer English tracks.
+- Auto-generated English captions are acceptable.
+- If no suitable cue text is available, keep the time-range fallback.
+- Do not fetch or store full transcripts in MVP.
 
 ### 4.3 Save Behavior
 

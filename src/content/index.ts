@@ -5,6 +5,7 @@ import * as storage from "../shared/storage";
 import { formatRangeLabel } from "../shared/time";
 import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
+import { getCaptionLabelForRange } from "./captionLabels";
 import { LoopEngine } from "./loopEngine";
 import { PhraseLoopPanel, type PanelState } from "./panel";
 import { registerShortcuts } from "./shortcuts";
@@ -33,6 +34,7 @@ let loopEngine: LoopEngine | null = null;
 let unregisterShortcuts: (() => void) | null = null;
 let clearNavigationListener: (() => void) | null = null;
 let highlightTimer: number | null = null;
+let labelRefreshToken = 0;
 
 void boot();
 
@@ -123,7 +125,7 @@ function setMarker(key: "markerA" | "markerB"): void {
 
   loopEngine?.setVideo(video);
   state.draft[key] = video.currentTime;
-  refreshDefaultLabel();
+  void refreshDefaultLabel();
   setMessage("");
   render();
 }
@@ -202,11 +204,35 @@ function setCollapsed(collapsed: boolean): void {
   render();
 }
 
-function refreshDefaultLabel(): void {
+async function refreshDefaultLabel(): Promise<void> {
   if (state.draft.labelDirty) return;
 
   const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
-  state.draft.label = validation.ok ? formatRangeLabel(validation.start, validation.end) : "";
+  const token = ++labelRefreshToken;
+
+  if (!validation.ok) {
+    state.draft.label = "";
+    return;
+  }
+
+  const fallbackLabel = formatRangeLabel(validation.start, validation.end);
+  state.draft.label = fallbackLabel;
+  render();
+
+  const video = findVideoElement();
+  if (!video) return;
+
+  const captionLabel = await getCaptionLabelForRange(video, validation.start, validation.end);
+  const markersStillMatch =
+    state.draft.markerA !== null &&
+    state.draft.markerB !== null &&
+    Math.min(state.draft.markerA, state.draft.markerB) === validation.start &&
+    Math.max(state.draft.markerA, state.draft.markerB) === validation.end;
+
+  if (captionLabel && token === labelRefreshToken && !state.draft.labelDirty && markersStillMatch) {
+    state.draft.label = captionLabel;
+    render();
+  }
 }
 
 function setMessage(message: string): void {

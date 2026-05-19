@@ -12,6 +12,7 @@
 ├── src/
 │   ├── content/
 │   │   ├── index.ts
+│   │   ├── captionLabels.ts
 │   │   ├── loopEngine.ts
 │   │   ├── panel.ts
 │   │   ├── shortcuts.ts
@@ -22,6 +23,7 @@
 │   │   ├── index.ts
 │   │   └── popup.css
 │   ├── shared/
+│   │   ├── captions.ts
 │   │   ├── constants.ts
 │   │   ├── ids.ts
 │   │   ├── importExport.ts
@@ -149,12 +151,25 @@ Responsibilities:
 - Normalize labels for duplicate detection.
 - Apply empty-label fallback.
 - Support dirty flag behavior in content state.
+- Fall back from empty user input to the generated default label.
 
 Normalization rules:
 
 - `trim`
 - lowercase
 - collapse consecutive whitespace
+
+### Caption Text
+
+`src/shared/captions.ts`
+
+Responsibilities:
+
+- Clean caption cue text.
+- Remove caption markup.
+- Remove bracketed non-speech annotations such as `[Music]`.
+- Collapse whitespace.
+- Join unique cue lines for a readable loop label.
 
 ### IDs
 
@@ -236,6 +251,21 @@ Responsibilities:
   - fallback `#below`
 - Listen for `yt-navigate-finish`.
 - Poll URL/videoId as fallback.
+
+### Caption Labels
+
+`src/content/captionLabels.ts`
+
+Responsibilities:
+
+- Read browser-exposed YouTube `TextTrack` entries from the current `HTMLVideoElement`.
+- Prefer English caption/subtitle tracks.
+- Allow auto-generated English caption tracks.
+- Load cues by temporarily setting disabled tracks to `hidden` when needed.
+- Extract cue text overlapping the sorted A-B range.
+- Return `null` when no usable caption text is available.
+
+If caption extraction fails, the content script keeps the time-range label fallback.
 
 ### Panel UI
 
@@ -402,6 +432,7 @@ Required cases:
 
 - Format seconds into display time.
 - Generate default time range label.
+- Clean and join caption cue text.
 - Validate missing A.
 - Validate missing B.
 - Validate under-1-second loop rejection.
