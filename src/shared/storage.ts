@@ -59,6 +59,22 @@ export async function renameLoop(videoId: string, loopId: string, label: string,
   return video;
 }
 
+export async function renameVideo(videoId: string, title: string): Promise<VideoLoops | null> {
+  const data = await readData();
+  const video = data.videos[videoId];
+  if (!video) return null;
+
+  video.title = title.trim() || video.title;
+  await writeData(data);
+  return video;
+}
+
+export async function deleteVideo(videoId: string): Promise<void> {
+  const data = await readData();
+  delete data.videos[videoId];
+  await writeData(data);
+}
+
 export async function deleteLoop(videoId: string, loopId: string): Promise<VideoLoops | null> {
   const data = await readData();
   const video = data.videos[videoId];

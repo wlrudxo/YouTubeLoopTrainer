@@ -1,0 +1,169 @@
+body {
+  margin: 0;
+  background: #f8fafc;
+  color: #111827;
+  font: 14px/1.45 Arial, sans-serif;
+}
+
+.library {
+  width: min(960px, calc(100% - 32px));
+  margin: 28px auto;
+}
+
+.library-header,
+.video-header,
+.loop-row,
+.loop-tools,
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.library-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 22px;
+}
+
+p,
+.video-meta,
+.loop-meta,
+.empty {
+  color: #64748b;
+}
+
+button {
+  min-height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #111827;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 10px;
+}
+
+button.danger {
+  color: #b91c1c;
+}
+
+.search-wrap {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  font-weight: 700;
+}
+
+input,
+textarea {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #111827;
+  font: inherit;
+}
+
+input {
+  min-height: 34px;
+  padding: 4px 8px;
+}
+
+textarea {
+  resize: vertical;
+  padding: 7px 8px;
+}
+
+.video-list {
+  display: grid;
+  gap: 12px;
+}
+
+.video-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.video-header {
+  align-items: flex-start;
+}
+
+.video-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 700;
+}
+
+.video-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-info {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+  min-width: 0;
+}
+
+.video-title-input,
+.loop-label-input {
+  width: 100%;
+}
+
+.video-title-input {
+  font-weight: 700;
+}
+
+.actions {
+  flex: 0 0 auto;
+}
+
+.loop-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.loop-row {
+  align-items: flex-start;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.loop-label-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.loop-meta {
+  width: 180px;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.loop-tools {
+  flex: 0 0 auto;
+}
+
+.empty {
+  padding: 8px 0;
+}

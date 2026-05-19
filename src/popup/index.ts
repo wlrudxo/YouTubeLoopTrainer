@@ -5,12 +5,17 @@ import "./popup.css";
 const searchInput = document.querySelector<HTMLInputElement>("#searchInput");
 const videoList = document.querySelector<HTMLDivElement>("#videoList");
 const summaryEl = document.querySelector<HTMLDivElement>("#summary");
+const libraryButton = document.querySelector<HTMLButtonElement>("#libraryButton");
 const settingsButton = document.querySelector<HTMLButtonElement>("#settingsButton");
 
 let videos: VideoLoops[] = [];
 
 settingsButton?.addEventListener("click", () => {
   void chrome.runtime.openOptionsPage();
+});
+
+libraryButton?.addEventListener("click", () => {
+  void chrome.tabs.create({ url: chrome.runtime.getURL("library/index.html") });
 });
 
 searchInput?.addEventListener("input", () => {

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PhraseLoop Library</title>
+    <script type="module" src="./index.ts"></script>
+  </head>
+  <body>
+    <main class="library">
+      <header class="library-header">
+        <div>
+          <h1>PhraseLoop Library</h1>
+          <p id="summary">Loading...</p>
+        </div>
+        <button id="settingsButton" type="button">Settings</button>
+      </header>
+
+      <label class="search-wrap">
+        <span>Search</span>
+        <input id="searchInput" type="search" placeholder="Video, channel, or loop label" />
+      </label>
+
+      <section id="videoList" class="video-list" aria-label="Saved videos"></section>
+    </main>
+  </body>
+</html>

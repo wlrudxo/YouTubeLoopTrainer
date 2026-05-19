@@ -7,6 +7,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
+        library: resolve(__dirname, "src/library/index.html"),
         popup: resolve(__dirname, "src/popup/index.html"),
         settings: resolve(__dirname, "src/settings/index.html")
       },
