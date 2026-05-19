@@ -19,20 +19,22 @@ type TranscriptResponse = {
 export async function getTranscriptLabelForRange(start: number, end: number, debug?: DebugLogger): Promise<string | null> {
   const apiKey = findInnertubeApiKey();
   const params = findTranscriptParams(debug);
-  const clientContext = findInnertubeClientContext();
+  const clientContexts = findTranscriptClientContexts();
 
   debug?.log("transcript", "transcript lookup context", {
     hasApiKey: Boolean(apiKey),
     paramsCount: params.length,
     paramsSources: params.map((item) => item.source),
-    clientContext
+    clientContexts
   });
 
   if (!apiKey || params.length === 0) return null;
 
   for (const item of params) {
-    const label = await fetchTranscriptLabel(apiKey, clientContext, item, start, end, debug);
-    if (label) return label;
+    for (const clientContext of clientContexts) {
+      const label = await fetchTranscriptLabel(apiKey, clientContext, item, start, end, debug);
+      if (label) return label;
+    }
   }
 
   return null;
@@ -62,7 +64,8 @@ async function fetchTranscriptLabel(
             clientVersion: clientContext.clientVersion,
             hl: clientContext.hl,
             gl: clientContext.gl,
-            visitorData: clientContext.visitorData
+            visitorData: clientContext.visitorData,
+            androidSdkVersion: clientContext.androidSdkVersion
           }
         },
         params: params.params
@@ -70,7 +73,7 @@ async function fetchTranscriptLabel(
     });
 
     const text = await response.text();
-    debug?.log("transcript", `get_transcript response (${params.source})`, {
+    debug?.log("transcript", `get_transcript response (${params.source}/${clientContext.source})`, {
       status: response.status,
       ok: response.ok,
       bodyLength: text.length,
@@ -83,7 +86,7 @@ async function fetchTranscriptLabel(
     const segments = extractTranscriptSegments(payload);
     const lines = segments.filter((segment) => segment.end > start && segment.start < end).map((segment) => segment.text);
     const label = joinCaptionLines(lines);
-    debug?.log("transcript", `transcript segment extraction (${params.source})`, {
+    debug?.log("transcript", `transcript segment extraction (${params.source}/${clientContext.source})`, {
       segmentCount: segments.length,
       matchedLines: lines.length,
       label
@@ -91,7 +94,11 @@ async function fetchTranscriptLabel(
 
     return label || null;
   } catch (error) {
-    debug?.log("transcript", `get_transcript failed (${params.source})`, error instanceof Error ? error.message : String(error));
+    debug?.log(
+      "transcript",
+      `get_transcript failed (${params.source}/${clientContext.source})`,
+      error instanceof Error ? error.message : String(error)
+    );
     return null;
   }
 }
@@ -159,6 +166,11 @@ function findTranscriptParams(debug?: DebugLogger): TranscriptParams[] {
   }
 
   const unique = dedupeParams(found);
+  const videoId = getVideoId();
+  if (videoId) {
+    unique.push({ source: "generated-protobuf-en", params: buildGeneratedTranscriptParams(videoId, "en") });
+  }
+
   debug?.log("transcript", "transcript params found", {
     count: unique.length,
     scriptsWithKeyword,
@@ -166,6 +178,54 @@ function findTranscriptParams(debug?: DebugLogger): TranscriptParams[] {
     paramLengths: unique.map((item) => item.params.length)
   });
   return unique;
+}
+
+function buildGeneratedTranscriptParams(videoId: string, languageCode: string): string {
+  const languageMessage = encodeProtoMessage([{ field: 2, value: languageCode }]);
+  const outerMessage = encodeProtoMessage([
+    { field: 1, value: videoId },
+    { field: 2, value: languageMessage }
+  ]);
+  return bytesToBase64(outerMessage);
+}
+
+type ProtoField = {
+  field: number;
+  value: string | Uint8Array;
+};
+
+function encodeProtoMessage(fields: ProtoField[]): Uint8Array {
+  const chunks: number[] = [];
+
+  for (const field of fields) {
+    const bytes = typeof field.value === "string" ? new TextEncoder().encode(field.value) : field.value;
+    chunks.push(...encodeVarint((field.field << 3) | 2));
+    chunks.push(...encodeVarint(bytes.length));
+    chunks.push(...bytes);
+  }
+
+  return new Uint8Array(chunks);
+}
+
+function encodeVarint(value: number): number[] {
+  const bytes: number[] = [];
+  let current = value;
+
+  while (current > 127) {
+    bytes.push((current & 0x7f) | 0x80);
+    current >>>= 7;
+  }
+
+  bytes.push(current);
+  return bytes;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
 }
 
 function extractParamsNearTranscriptEndpoints(text: string): string[] {
@@ -181,17 +241,46 @@ function extractParamsNearTranscriptEndpoints(text: string): string[] {
 }
 
 type InnertubeClientContext = {
+  source: string;
   clientName: string;
   clientHeaderName: string;
   clientVersion: string;
   hl: string;
   gl: string;
   visitorData?: string;
+  androidSdkVersion?: number;
 };
 
-function findInnertubeClientContext(): InnertubeClientContext {
+function findTranscriptClientContexts(): InnertubeClientContext[] {
+  const page = findPageInnertubeClientContext();
+  return [
+    page,
+    {
+      source: "android",
+      clientName: "ANDROID",
+      clientHeaderName: "3",
+      clientVersion: "19.09.37",
+      hl: "en",
+      gl: "US",
+      visitorData: page.visitorData,
+      androidSdkVersion: 30
+    },
+    {
+      source: "web-static",
+      clientName: "WEB",
+      clientHeaderName: "1",
+      clientVersion: "2.20240313",
+      hl: "en",
+      gl: "US",
+      visitorData: page.visitorData
+    }
+  ];
+}
+
+function findPageInnertubeClientContext(): InnertubeClientContext {
   const clientName = readYtConfigString("INNERTUBE_CLIENT_NAME") ?? "WEB";
   return {
+    source: "page",
     clientName,
     clientHeaderName: inferClientHeaderName(clientName),
     clientVersion: readYtConfigString("INNERTUBE_CLIENT_VERSION") ?? "2.20240519.01.00",
@@ -229,6 +318,10 @@ function findTranscriptParamsInJson(root: unknown, source: string): TranscriptPa
   });
 
   return found;
+}
+
+function getVideoId(): string | null {
+  return new URL(window.location.href).searchParams.get("v");
 }
 
 function parseNamedInitialJson(scriptText: string, name: string): unknown | null {
