@@ -159,6 +159,15 @@ async function saveDraftLoop(): Promise<void> {
     return;
   }
 
+  if (!state.draft.labelDirty) {
+    const saveLabel = await getFreshCaptionLabel(validation.start, validation.end);
+    if (saveLabel) {
+      state.draft.label = saveLabel;
+      debug.log("label", "applied fresh caption label before save", { captionLabel: saveLabel });
+      render();
+    }
+  }
+
   const loop: Loop = {
     id: createLoopId(),
     start: validation.start,
@@ -269,6 +278,16 @@ async function refreshDefaultLabel(): Promise<void> {
       markersStillMatch
     });
   }
+}
+
+async function getFreshCaptionLabel(start: number, end: number): Promise<string | null> {
+  const video = findVideoElement();
+  if (!video) {
+    debug.log("label", "cannot refresh caption before save because video element is missing");
+    return null;
+  }
+
+  return getCaptionLabelForRange(video, start, end, debug);
 }
 
 function setMessage(message: string): void {

@@ -5,7 +5,7 @@ export type DebugRecord = {
   details?: unknown;
 };
 
-const MAX_RECORDS = 40;
+const MAX_RECORDS = 120;
 
 export class DebugLogger {
   private records: DebugRecord[] = [];
