@@ -6,6 +6,7 @@ import {
   type Json3CaptionEvent
 } from "../shared/captions";
 import type { DebugLogger } from "./debug";
+import { getTranscriptLabelForRange } from "./transcriptLabels";
 
 const CUE_LOAD_TIMEOUT_MS = 900;
 const CUE_LOAD_POLL_MS = 100;
@@ -17,6 +18,12 @@ export async function getCaptionLabelForRange(
   debug?: DebugLogger
 ): Promise<string | null> {
   debug?.log("captions", "start label lookup", { start, end, textTracks: video.textTracks.length });
+
+  const transcriptLabel = await getTranscriptLabelForRange(start, end, debug);
+  if (transcriptLabel) {
+    debug?.log("captions", "using transcript label", { label: transcriptLabel });
+    return transcriptLabel;
+  }
 
   const timedTextLabel = await getTimedTextCaptionLabel(start, end, debug);
   if (timedTextLabel) {
