@@ -6,6 +6,7 @@ import { formatRangeLabel } from "../shared/time";
 import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
 import { getCaptionLabelForRange } from "./captionLabels";
+import { DebugLogger } from "./debug";
 import { LoopEngine } from "./loopEngine";
 import { PhraseLoopPanel, type PanelState } from "./panel";
 import { registerShortcuts } from "./shortcuts";
@@ -18,6 +19,7 @@ type AppState = {
   message: string;
   highlightedLoopId: string | null;
   collapsed: boolean;
+  debugExpanded: boolean;
 };
 
 const state: AppState = {
@@ -26,8 +28,11 @@ const state: AppState = {
   draft: createEmptyDraft(),
   message: "",
   highlightedLoopId: null,
-  collapsed: false
+  collapsed: false,
+  debugExpanded: false
 };
+
+const debug = new DebugLogger();
 
 let panel: PhraseLoopPanel | null = null;
 let loopEngine: LoopEngine | null = null;
@@ -39,6 +44,9 @@ let labelRefreshToken = 0;
 void boot();
 
 async function boot(): Promise<void> {
+  debug.subscribe(render);
+  debug.log("app", "boot");
+
   loopEngine = new LoopEngine((loop) => {
     render({ activeLoopId: loop?.id ?? null });
   });
@@ -54,6 +62,7 @@ async function loadCurrentVideo(): Promise<void> {
   const videoId = getVideoIdFromUrl();
   if (!videoId) return;
 
+  debug.log("app", "loading video", { videoId, url: window.location.href });
   state.videoId = videoId;
   state.draft = createEmptyDraft();
   state.message = "";
@@ -64,9 +73,11 @@ async function loadCurrentVideo(): Promise<void> {
   const existing = await storage.getVideo(videoId);
   if (existing) {
     state.video = existing;
+    debug.log("storage", "loaded existing video loops", { videoId, loops: existing.loops.length });
   } else {
     const data = await storage.readData();
     state.video = ensureVideo(data, videoId, getVideoTitle(), getWatchUrl(videoId));
+    debug.log("storage", "created in-memory video entry", { videoId });
   }
 
   mountOrRenderPanel();
@@ -89,7 +100,8 @@ function mountOrRenderPanel(): void {
       stopLoop,
       renameLoop: (loop, label) => void renameLoop(loop, label),
       deleteLoop: (loop) => void deleteLoop(loop),
-      setCollapsed
+      setCollapsed,
+      setDebugExpanded
     });
   }
 
@@ -125,6 +137,7 @@ function setMarker(key: "markerA" | "markerB"): void {
 
   loopEngine?.setVideo(video);
   state.draft[key] = video.currentTime;
+  debug.log("draft", `set ${key}`, { currentTime: video.currentTime });
   void refreshDefaultLabel();
   setMessage("");
   render();
@@ -154,6 +167,7 @@ async function saveDraftLoop(): Promise<void> {
   };
 
   state.video = await storage.addLoop(state.videoId, getVideoTitle(), getWatchUrl(state.videoId), loop);
+  debug.log("storage", "saved loop", loop);
   state.draft = createEmptyDraft();
   state.highlightedLoopId = loop.id;
   setMessage("Loop saved.");
@@ -204,25 +218,38 @@ function setCollapsed(collapsed: boolean): void {
   render();
 }
 
+function setDebugExpanded(expanded: boolean): void {
+  state.debugExpanded = expanded;
+  render();
+}
+
 async function refreshDefaultLabel(): Promise<void> {
-  if (state.draft.labelDirty) return;
+  if (state.draft.labelDirty) {
+    debug.log("label", "skip auto label because draft label is dirty");
+    return;
+  }
 
   const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
   const token = ++labelRefreshToken;
 
   if (!validation.ok) {
     state.draft.label = "";
+    debug.log("label", "draft markers not valid yet", validation);
     return;
   }
 
   const fallbackLabel = formatRangeLabel(validation.start, validation.end);
   state.draft.label = fallbackLabel;
+  debug.log("label", "set time fallback label", { fallbackLabel, start: validation.start, end: validation.end });
   render();
 
   const video = findVideoElement();
-  if (!video) return;
+  if (!video) {
+    debug.log("label", "cannot look up captions because video element is missing");
+    return;
+  }
 
-  const captionLabel = await getCaptionLabelForRange(video, validation.start, validation.end);
+  const captionLabel = await getCaptionLabelForRange(video, validation.start, validation.end, debug);
   const markersStillMatch =
     state.draft.markerA !== null &&
     state.draft.markerB !== null &&
@@ -231,7 +258,15 @@ async function refreshDefaultLabel(): Promise<void> {
 
   if (captionLabel && token === labelRefreshToken && !state.draft.labelDirty && markersStillMatch) {
     state.draft.label = captionLabel;
+    debug.log("label", "applied caption label", { captionLabel });
     render();
+  } else {
+    debug.log("label", "kept fallback label", {
+      hasCaptionLabel: Boolean(captionLabel),
+      tokenCurrent: token === labelRefreshToken,
+      labelDirty: state.draft.labelDirty,
+      markersStillMatch
+    });
   }
 }
 
@@ -261,7 +296,9 @@ function toPanelState(): PanelState {
     activeLoopId: loopEngine?.getActiveLoop()?.id ?? null,
     message: state.message,
     highlightedLoopId: state.highlightedLoopId,
-    collapsed: state.collapsed
+    collapsed: state.collapsed,
+    debugRecords: debug.getRecords(),
+    debugExpanded: state.debugExpanded
   };
 }
 

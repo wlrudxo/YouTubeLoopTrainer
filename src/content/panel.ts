@@ -1,6 +1,7 @@
 import { formatTime } from "../shared/time";
 import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
+import type { DebugRecord } from "./debug";
 
 export type PanelState = {
   draft: DraftLoop;
@@ -9,6 +10,8 @@ export type PanelState = {
   message: string;
   highlightedLoopId: string | null;
   collapsed: boolean;
+  debugRecords: DebugRecord[];
+  debugExpanded: boolean;
 };
 
 export type PanelActions = {
@@ -21,6 +24,7 @@ export type PanelActions = {
   renameLoop: (loop: Loop, label: string) => void;
   deleteLoop: (loop: Loop) => void;
   setCollapsed: (collapsed: boolean) => void;
+  setDebugExpanded: (expanded: boolean) => void;
 };
 
 const PANEL_ID = "phraseloop-panel";
@@ -56,7 +60,7 @@ export class PhraseLoopPanel {
   }
 
   private render(): void {
-    const { draft, video, activeLoopId, message, highlightedLoopId, collapsed } = this.state;
+    const { draft, video, activeLoopId, message, highlightedLoopId, collapsed, debugRecords, debugExpanded } = this.state;
     const validation = validateDraftMarkers(draft.markerA, draft.markerB);
     const loops = video?.loops ?? [];
 
@@ -123,6 +127,15 @@ export class PhraseLoopPanel {
       }
     }
     this.root.append(list);
+
+    const debugToggle = button(`Debug (${debugRecords.length})`, "Show caption diagnostics");
+    debugToggle.className = "phraseloop-debug-toggle";
+    debugToggle.addEventListener("click", () => this.actions.setDebugExpanded(!debugExpanded));
+    this.root.append(debugToggle);
+
+    if (debugExpanded) {
+      this.root.append(this.renderDebugRecords(debugRecords));
+    }
   }
 
   private markerRow(label: string, value: number | null, shortcut: string, action: () => void): HTMLElement {
@@ -186,6 +199,30 @@ export class PhraseLoopPanel {
     input.focus();
     input.select();
   }
+
+  private renderDebugRecords(records: DebugRecord[]): HTMLElement {
+    const wrap = element("div", "phraseloop-debug");
+
+    if (records.length === 0) {
+      wrap.append(element("div", "phraseloop-empty", "No debug records yet."));
+      return wrap;
+    }
+
+    for (const record of records.slice(0, 12)) {
+      const item = element("div", "phraseloop-debug-record");
+      const summary = element("div", "phraseloop-debug-summary", `${record.time} ${record.area}: ${record.message}`);
+      item.append(summary);
+
+      if (record.details !== undefined) {
+        const details = element("pre", "phraseloop-debug-details", formatDetails(record.details));
+        item.append(details);
+      }
+
+      wrap.append(item);
+    }
+
+    return wrap;
+  }
 }
 
 export function getExistingPanel(): HTMLElement | null {
@@ -205,4 +242,14 @@ function button(text: string, title: string): HTMLButtonElement {
   node.textContent = text;
   node.title = title;
   return node;
+}
+
+function formatDetails(details: unknown): string {
+  if (typeof details === "string") return details;
+
+  try {
+    return JSON.stringify(details, null, 2);
+  } catch {
+    return String(details);
+  }
 }

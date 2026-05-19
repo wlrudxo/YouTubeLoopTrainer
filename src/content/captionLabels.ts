@@ -1,14 +1,30 @@
 import { extractJson3CaptionLines, joinCaptionLines, type Json3CaptionEvent } from "../shared/captions";
+import type { DebugLogger } from "./debug";
 
 const CUE_LOAD_TIMEOUT_MS = 900;
 const CUE_LOAD_POLL_MS = 100;
 
-export async function getCaptionLabelForRange(video: HTMLVideoElement, start: number, end: number): Promise<string | null> {
-  const timedTextLabel = await getTimedTextCaptionLabel(start, end);
-  if (timedTextLabel) return timedTextLabel;
+export async function getCaptionLabelForRange(
+  video: HTMLVideoElement,
+  start: number,
+  end: number,
+  debug?: DebugLogger
+): Promise<string | null> {
+  debug?.log("captions", "start label lookup", { start, end, textTracks: video.textTracks.length });
+
+  const timedTextLabel = await getTimedTextCaptionLabel(start, end, debug);
+  if (timedTextLabel) {
+    debug?.log("captions", "using timedtext label", { label: timedTextLabel });
+    return timedTextLabel;
+  }
 
   const track = chooseCaptionTrack(video.textTracks);
-  if (!track) return null;
+  if (!track) {
+    debug?.log("captions", "no browser TextTrack fallback available");
+    return null;
+  }
+
+  debug?.log("captions", "trying browser TextTrack fallback", describeTextTrack(track));
 
   const previousMode = track.mode;
   if (track.mode === "disabled") {
@@ -18,6 +34,7 @@ export async function getCaptionLabelForRange(video: HTMLVideoElement, start: nu
   const cues = await waitForCues(track);
   if (!cues) {
     track.mode = previousMode;
+    debug?.log("captions", "TextTrack cues did not load", describeTextTrack(track));
     return null;
   }
 
@@ -30,6 +47,7 @@ export async function getCaptionLabelForRange(video: HTMLVideoElement, start: nu
   }
 
   const label = joinCaptionLines(lines);
+  debug?.log("captions", "TextTrack cue extraction complete", { cueCount: cues.length, matchedLines: lines.length, label });
   return label || null;
 }
 
@@ -74,21 +92,48 @@ function cueToText(cue: TextTrackCue): string {
   return "text" in cue && typeof cue.text === "string" ? cue.text : "";
 }
 
-async function getTimedTextCaptionLabel(start: number, end: number): Promise<string | null> {
-  const captionTrack = chooseTimedTextTrack(findCaptionTracks());
-  if (!captionTrack) return null;
+async function getTimedTextCaptionLabel(start: number, end: number, debug?: DebugLogger): Promise<string | null> {
+  const captionTracks = findCaptionTracks(debug);
+  debug?.log("captions", "timedtext tracks found", {
+    count: captionTracks.length,
+    tracks: captionTracks.map(describeTimedTextTrack)
+  });
+
+  const captionTrack = chooseTimedTextTrack(captionTracks);
+  if (!captionTrack) {
+    debug?.log("captions", "no timedtext caption track selected");
+    return null;
+  }
+
+  debug?.log("captions", "selected timedtext track", describeTimedTextTrack(captionTrack));
 
   try {
     const url = new URL(captionTrack.baseUrl);
     url.searchParams.set("fmt", "json3");
 
+    debug?.log("captions", "fetching timedtext json3", {
+      host: url.host,
+      path: url.pathname,
+      lang: url.searchParams.get("lang"),
+      kind: url.searchParams.get("kind")
+    });
+
     const response = await fetch(url.toString(), { credentials: "include" });
+    debug?.log("captions", "timedtext fetch response", { status: response.status, ok: response.ok });
     if (!response.ok) return null;
 
     const payload = (await response.json()) as { events?: Json3CaptionEvent[] };
-    const label = joinCaptionLines(extractJson3CaptionLines(payload.events ?? [], start, end));
+    const events = payload.events ?? [];
+    const lines = extractJson3CaptionLines(events, start, end);
+    const label = joinCaptionLines(lines);
+    debug?.log("captions", "timedtext event extraction complete", {
+      eventCount: events.length,
+      matchedLines: lines.length,
+      label
+    });
     return label || null;
-  } catch {
+  } catch (error) {
+    debug?.log("captions", "timedtext lookup failed", error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -103,8 +148,8 @@ type TimedTextTrack = {
   };
 };
 
-function findCaptionTracks(): TimedTextTrack[] {
-  const playerResponse = findInitialPlayerResponse();
+function findCaptionTracks(debug?: DebugLogger): TimedTextTrack[] {
+  const playerResponse = findInitialPlayerResponse(debug);
   const tracks =
     playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
 
@@ -134,15 +179,28 @@ function getTrackLabel(track: TimedTextTrack): string {
   return track.name?.runs?.map((run) => run.text ?? "").join("") ?? "";
 }
 
-function findInitialPlayerResponse(): PlayerResponse | null {
+function findInitialPlayerResponse(debug?: DebugLogger): PlayerResponse | null {
+  let candidateScripts = 0;
+
   for (const script of Array.from(document.scripts)) {
     const text = script.textContent;
     if (!text || !text.includes("ytInitialPlayerResponse")) continue;
 
+    candidateScripts += 1;
     const response = parsePlayerResponseFromScript(text);
-    if (response) return response;
+    if (response) {
+      debug?.log("captions", "parsed ytInitialPlayerResponse from script", { candidateScripts });
+      return response;
+    }
   }
 
+  const windowResponse = readWindowPlayerResponse();
+  if (windowResponse) {
+    debug?.log("captions", "read ytInitialPlayerResponse from window");
+    return windowResponse;
+  }
+
+  debug?.log("captions", "could not find ytInitialPlayerResponse", { candidateScripts });
   return null;
 }
 
@@ -200,6 +258,37 @@ function readBalancedJsonObject(text: string, startIndex: number): string | null
 
 function isTimedTextTrack(value: unknown): value is TimedTextTrack {
   return typeof value === "object" && value !== null && typeof (value as TimedTextTrack).baseUrl === "string";
+}
+
+function readWindowPlayerResponse(): PlayerResponse | null {
+  const value = (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse;
+  return typeof value === "object" && value !== null ? (value as PlayerResponse) : null;
+}
+
+function describeTimedTextTrack(track: TimedTextTrack): Record<string, string | undefined> {
+  return {
+    languageCode: track.languageCode,
+    kind: track.kind,
+    label: getTrackLabel(track),
+    baseUrlHost: safeUrlHost(track.baseUrl)
+  };
+}
+
+function describeTextTrack(track: TextTrack): Record<string, string> {
+  return {
+    kind: track.kind,
+    language: track.language,
+    label: track.label,
+    mode: track.mode
+  };
+}
+
+function safeUrlHost(url: string): string | undefined {
+  try {
+    return new URL(url).host;
+  } catch {
+    return undefined;
+  }
 }
 
 type PlayerResponse = {
