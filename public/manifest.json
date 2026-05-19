@@ -8,6 +8,10 @@
   "action": {
     "default_popup": "popup/index.html"
   },
+  "options_ui": {
+    "page": "settings/index.html",
+    "open_in_tab": true
+  },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],

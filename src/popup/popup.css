@@ -1,6 +1,7 @@
 body {
   margin: 0;
-  min-width: 280px;
+  min-width: 360px;
+  max-width: 420px;
   background: #ffffff;
   color: #111827;
   font: 13px/1.4 Arial, sans-serif;
@@ -11,7 +12,10 @@ body {
 }
 
 .popup-header {
-  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 h1 {
@@ -19,10 +23,15 @@ h1 {
   font-size: 16px;
 }
 
-.section {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
+.summary,
+.video-meta,
+.empty {
+  color: #64748b;
+}
+
+.summary {
+  margin-top: 2px;
+  font-size: 12px;
 }
 
 button {
@@ -35,26 +44,76 @@ button {
   font: inherit;
 }
 
-fieldset {
+.icon-button {
+  width: 32px;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.search-wrap {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.field-label {
+  font-weight: 700;
+}
+
+input {
+  min-height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #111827;
+  font: inherit;
+}
+
+.section {
+  margin-top: 12px;
+}
+
+.video-list {
+  display: grid;
+  gap: 6px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.video-row {
   display: flex;
-  gap: 10px;
-  margin: 0;
-  padding: 8px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
 }
 
-legend {
+.video-main {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.video-title,
+.video-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-title {
   font-weight: 700;
 }
 
-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.video-meta {
+  font-size: 12px;
 }
 
-.status {
-  margin-top: 12px;
-  color: #334155;
+.empty {
+  padding: 12px 4px;
 }

@@ -9,29 +9,21 @@
   <body>
     <main class="popup">
       <header class="popup-header">
-        <h1>PhraseLoop</h1>
+        <div>
+          <h1>PhraseLoop</h1>
+          <div id="summary" class="summary">Loading...</div>
+        </div>
+        <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Settings">⚙</button>
       </header>
 
-      <section class="section">
-        <button id="exportButton" type="button">Export JSON</button>
-      </section>
+      <label class="search-wrap">
+        <span class="field-label">Search</span>
+        <input id="searchInput" type="search" placeholder="Video title or loop label" />
+      </label>
 
-      <section class="section">
-        <fieldset>
-          <legend>Import Mode</legend>
-          <label>
-            <input type="radio" name="importMode" value="merge" checked />
-            Merge
-          </label>
-          <label>
-            <input type="radio" name="importMode" value="replace" />
-            Replace
-          </label>
-        </fieldset>
-        <input id="importFile" type="file" accept="application/json,.json" />
+      <section class="section" aria-label="Saved videos">
+        <div id="videoList" class="video-list"></div>
       </section>
-
-      <div id="status" class="status" role="status"></div>
     </main>
   </body>
 </html>

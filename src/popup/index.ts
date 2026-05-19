@@ -1,73 +1,120 @@
-import { createExportPayload, mergePhraseLoopData, parseImportPayload, replacePhraseLoopData } from "../shared/importExport";
 import * as storage from "../shared/storage";
-import type { ImportMode } from "../shared/types";
+import type { VideoLoops } from "../shared/types";
 import "./popup.css";
 
-const exportButton = document.querySelector<HTMLButtonElement>("#exportButton");
-const importFile = document.querySelector<HTMLInputElement>("#importFile");
-const statusEl = document.querySelector<HTMLDivElement>("#status");
+const searchInput = document.querySelector<HTMLInputElement>("#searchInput");
+const videoList = document.querySelector<HTMLDivElement>("#videoList");
+const summaryEl = document.querySelector<HTMLDivElement>("#summary");
+const settingsButton = document.querySelector<HTMLButtonElement>("#settingsButton");
 
-exportButton?.addEventListener("click", () => {
-  void exportData();
+let videos: VideoLoops[] = [];
+
+settingsButton?.addEventListener("click", () => {
+  void chrome.runtime.openOptionsPage();
 });
 
-importFile?.addEventListener("change", () => {
-  void importData();
+searchInput?.addEventListener("input", () => {
+  renderVideos();
 });
 
-async function exportData(): Promise<void> {
-  try {
-    const data = await storage.readData();
-    const payload = createExportPayload(data);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `phraseloop-${payload.exportedAt.slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setStatus("Export ready.");
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Export failed.");
+void loadLibrary();
+
+async function loadLibrary(): Promise<void> {
+  const data = await storage.readData();
+  videos = Object.values(data.videos).sort(compareVideos);
+  renderVideos();
+}
+
+function renderVideos(): void {
+  if (!videoList || !summaryEl) return;
+
+  const query = normalize(searchInput?.value ?? "");
+  const filtered = query ? videos.filter((video) => matchesVideo(video, query)) : videos;
+  const totalLoops = videos.reduce((sum, video) => sum + video.loops.length, 0);
+
+  summaryEl.textContent = `${videos.length} videos · ${totalLoops} loops`;
+  videoList.innerHTML = "";
+
+  if (filtered.length === 0) {
+    videoList.append(createEmptyState(videos.length === 0 ? "No saved videos yet." : "No matching videos."));
+    return;
+  }
+
+  for (const video of filtered) {
+    videoList.append(createVideoRow(video));
   }
 }
 
-async function importData(): Promise<void> {
-  const file = importFile?.files?.[0];
-  if (!file) return;
+function createVideoRow(video: VideoLoops): HTMLElement {
+  const row = document.createElement("article");
+  row.className = "video-row";
 
-  try {
-    const imported = parseImportPayload(JSON.parse(await file.text()));
-    const mode = getImportMode();
+  const body = document.createElement("button");
+  body.type = "button";
+  body.className = "video-main";
+  body.title = `Open ${getVideoTitle(video)}`;
+  body.addEventListener("click", () => openVideo(video));
 
-    if (mode === "replace") {
-      await storage.writeData(replacePhraseLoopData(imported));
-      setStatus("Import complete. Data replaced.");
-      return;
-    }
+  const title = document.createElement("span");
+  title.className = "video-title";
+  title.textContent = getVideoTitle(video);
 
-    const existing = await storage.readData();
-    const { data, summary } = mergePhraseLoopData(existing, imported);
-    await storage.writeData(data);
-    setStatus(
-      `Import complete. Videos: ${summary.videosProcessed}, added: ${summary.loopsAdded}, updated: ${summary.loopsUpdated}, skipped: ${summary.duplicatesSkipped}.`
-    );
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Import failed.");
-  } finally {
-    if (importFile) {
-      importFile.value = "";
-    }
-  }
+  const meta = document.createElement("span");
+  meta.className = "video-meta";
+  meta.textContent = `${video.loops.length} loops${formatUpdatedAt(video)}`;
+
+  body.append(title, meta);
+
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.className = "icon-button";
+  openButton.textContent = "↗";
+  openButton.title = `Open ${getVideoTitle(video)}`;
+  openButton.setAttribute("aria-label", `Open ${getVideoTitle(video)}`);
+  openButton.addEventListener("click", () => openVideo(video));
+
+  row.append(body, openButton);
+  return row;
 }
 
-function getImportMode(): ImportMode {
-  const checked = document.querySelector<HTMLInputElement>("input[name='importMode']:checked");
-  return checked?.value === "replace" ? "replace" : "merge";
+function createEmptyState(message: string): HTMLElement {
+  const empty = document.createElement("div");
+  empty.className = "empty";
+  empty.textContent = message;
+  return empty;
 }
 
-function setStatus(message: string): void {
-  if (statusEl) {
-    statusEl.textContent = message;
-  }
+function openVideo(video: VideoLoops): void {
+  void chrome.tabs.create({ url: video.url || `https://www.youtube.com/watch?v=${video.videoId}` });
+}
+
+function matchesVideo(video: VideoLoops, query: string): boolean {
+  return (
+    normalize(video.title).includes(query) ||
+    normalize(video.videoId).includes(query) ||
+    video.loops.some((loop) => normalize(loop.label).includes(query))
+  );
+}
+
+function compareVideos(a: VideoLoops, b: VideoLoops): number {
+  return getLatestUpdatedAt(b) - getLatestUpdatedAt(a) || getVideoTitle(a).localeCompare(getVideoTitle(b));
+}
+
+function getLatestUpdatedAt(video: VideoLoops): number {
+  return Math.max(0, ...video.loops.map((loop) => Date.parse(loop.updatedAt) || 0));
+}
+
+function formatUpdatedAt(video: VideoLoops): string {
+  const latest = getLatestUpdatedAt(video);
+  if (!latest) return "";
+
+  return ` · updated ${new Date(latest).toLocaleDateString()}`;
+}
+
+function getVideoTitle(video: VideoLoops): string {
+  return video.title || video.videoId;
+}
+
+function normalize(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
