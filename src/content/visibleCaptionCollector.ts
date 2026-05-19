@@ -1,4 +1,4 @@
-import { getVisibleCaptionText, joinCaptionLines } from "../shared/captions";
+import { getVisibleCaptionText, joinCaptionSamples } from "../shared/captions";
 import type { DebugLogger } from "./debug";
 
 const COLLECT_INTERVAL_MS = 180;
@@ -26,7 +26,7 @@ export class VisibleCaptionCollector {
     }
 
     this.collect();
-    const label = joinCaptionLines(this.samples);
+    const label = joinCaptionSamples(this.samples);
     this.debug?.log("collector", "stopped", {
       sampleCount: this.samples.length,
       label
