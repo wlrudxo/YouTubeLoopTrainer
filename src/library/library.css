@@ -14,8 +14,9 @@ body {
 .library-grid,
 .detail-header,
 .loop-row,
-.loop-tools,
+.loop-tool-row,
 .actions,
+.action-row,
 .video-button {
   display: flex;
   gap: 10px;
@@ -201,7 +202,17 @@ textarea {
 }
 
 .actions {
+  display: grid;
+  gap: 6px;
   flex: 0 0 auto;
+}
+
+.action-row {
+  justify-content: flex-end;
+}
+
+.action-row.is-secondary button {
+  width: 100%;
 }
 
 .loops-header {
@@ -277,13 +288,24 @@ textarea {
 }
 
 .loop-meta {
-  width: 172px;
-  flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .loop-tools {
+  display: grid;
+  gap: 6px;
   flex: 0 0 auto;
+  min-width: 146px;
+}
+
+.loop-tool-row {
+  justify-content: flex-end;
+}
+
+.loop-tool-row.is-secondary button {
+  width: 100%;
 }
 
 .empty {
@@ -305,8 +327,23 @@ textarea {
     display: grid;
   }
 
+  .actions,
+  .loop-tools {
+    width: 100%;
+  }
+
+  .action-row,
+  .loop-tool-row {
+    justify-content: stretch;
+  }
+
+  .action-row button,
+  .loop-tool-row button {
+    flex: 1;
+  }
+
   .loop-meta {
-    width: auto;
+    text-align: left;
   }
 
   .loops-header {

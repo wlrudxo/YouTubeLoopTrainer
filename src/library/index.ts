@@ -139,6 +139,10 @@ function createVideoInfo(video: VideoLoops): HTMLElement {
 function createVideoActions(video: VideoLoops): HTMLElement {
   const actions = document.createElement("div");
   actions.className = "actions";
+  const primaryRow = document.createElement("div");
+  primaryRow.className = "action-row";
+  const secondaryRow = document.createElement("div");
+  secondaryRow.className = "action-row is-secondary";
 
   const openButton = document.createElement("button");
   openButton.type = "button";
@@ -163,7 +167,9 @@ function createVideoActions(video: VideoLoops): HTMLElement {
     void deleteVideo(video);
   });
 
-  actions.append(openButton, progressButton, deleteButton);
+  primaryRow.append(openButton, deleteButton);
+  secondaryRow.append(progressButton);
+  actions.append(primaryRow, secondaryRow);
   return actions;
 }
 
@@ -185,12 +191,12 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
     }
   });
 
-  const meta = document.createElement("div");
-  meta.className = "loop-meta";
-  meta.textContent = `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.updatedAt)}`;
-
   const tools = document.createElement("div");
   tools.className = "loop-tools";
+  const primaryRow = document.createElement("div");
+  primaryRow.className = "loop-tool-row";
+  const secondaryRow = document.createElement("div");
+  secondaryRow.className = "loop-tool-row is-secondary";
 
   const status = getLoopStatus(loop);
   const statusButton = document.createElement("button");
@@ -216,8 +222,14 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
     void deleteLoop(video, loop);
   });
 
-  tools.append(statusButton, openButton, deleteButton);
-  row.append(label, meta, tools);
+  const meta = document.createElement("div");
+  meta.className = "loop-meta";
+  meta.textContent = `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.updatedAt)}`;
+
+  primaryRow.append(openButton, deleteButton);
+  secondaryRow.append(statusButton);
+  tools.append(primaryRow, secondaryRow, meta);
+  row.append(label, tools);
   return row;
 }
 
