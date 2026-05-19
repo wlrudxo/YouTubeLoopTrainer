@@ -4,7 +4,7 @@ import { resolveLoopLabel } from "../shared/labels";
 import * as storage from "../shared/storage";
 import { APP_BUILD } from "../shared/constants";
 import { formatRangeLabel } from "../shared/time";
-import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
+import type { DraftLoop, Loop, LoopStatus, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
 import { getCurrentVisibleCaptionLabel } from "./captionLabels";
 import { DebugLogger } from "./debug";
@@ -130,6 +130,7 @@ function mountOrRenderPanel(): void {
       startLoop,
       stopLoop,
       renameLoop: (loop, label) => void renameLoop(loop, label),
+      setLoopStatus: (loop, status) => void setLoopStatus(loop, status),
       deleteLoop: (loop) => void deleteLoop(loop),
       setCollapsed,
       setDebugExpanded
@@ -227,6 +228,7 @@ async function saveDraftLoop(): Promise<void> {
     start: validation.start,
     end: validation.end,
     label: resolveLoopLabel(state.draft.label, validation.start, validation.end),
+    status: "new",
     updatedAt: new Date().toISOString()
   };
 
@@ -335,6 +337,14 @@ async function renameLoop(loop: Loop, nextLabel: string): Promise<void> {
 
   const label = nextLabel.trim() || loop.label;
   state.video = await storage.renameLoop(state.videoId, loop.id, label, new Date().toISOString());
+  render();
+}
+
+async function setLoopStatus(loop: Loop, status: LoopStatus): Promise<void> {
+  if (!state.videoId) return;
+
+  state.video = await storage.setLoopStatus(state.videoId, loop.id, status, new Date().toISOString());
+  debug.log("loop", "updated loop status", { id: loop.id, status });
   render();
 }
 

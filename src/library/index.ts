@@ -1,7 +1,7 @@
 import * as storage from "../shared/storage";
 import { LOOP_URL_PARAM } from "../shared/constants";
 import { formatTime } from "../shared/time";
-import type { Loop, VideoLoops } from "../shared/types";
+import type { Loop, LoopStatus, VideoLoops } from "../shared/types";
 import "./library.css";
 
 const summaryEl = document.querySelector<HTMLParagraphElement>("#summary");
@@ -12,6 +12,7 @@ const detailPanel = document.querySelector<HTMLElement>("#detailPanel");
 
 let videos: VideoLoops[] = [];
 let selectedVideoId: string | null = null;
+let statusFilter: "all" | LoopStatus = "all";
 
 settingsButton?.addEventListener("click", () => {
   void chrome.runtime.openOptionsPage();
@@ -75,15 +76,21 @@ function renderDetail(target: HTMLElement, video: VideoLoops | null): void {
 
   const loopsHeader = document.createElement("div");
   loopsHeader.className = "loops-header";
-  loopsHeader.append(element("h2", "", "Loops"));
-  loopsHeader.append(element("span", "loop-count", `${video.loops.length} saved`));
+  const loopsTitle = document.createElement("div");
+  loopsTitle.className = "loops-title";
+  loopsTitle.append(element("h2", "", "Loops"), element("span", "loop-count", `${video.loops.length} saved`));
+  loopsHeader.append(loopsTitle, createStatusFilters());
   target.append(loopsHeader);
 
   const list = document.createElement("section");
   list.className = "loop-list";
 
   const query = normalize(searchInput?.value ?? "");
-  const loops = query ? video.loops.filter((loop) => normalize(loop.label).includes(query)) : video.loops;
+  const loops = video.loops.filter((loop) => {
+    const matchesQuery = query ? normalize(loop.label).includes(query) : true;
+    const matchesStatus = statusFilter === "all" || getLoopStatus(loop) === statusFilter;
+    return matchesQuery && matchesStatus;
+  });
 
   if (loops.length === 0) {
     list.append(createEmpty(video.loops.length === 0 ? "No loops saved for this video." : "No matching loops."));
@@ -185,6 +192,15 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
   const tools = document.createElement("div");
   tools.className = "loop-tools";
 
+  const status = getLoopStatus(loop);
+  const statusButton = document.createElement("button");
+  statusButton.type = "button";
+  statusButton.textContent = formatLoopStatus(status);
+  statusButton.className = `status-button is-${status}`;
+  statusButton.addEventListener("click", () => {
+    void setLoopStatus(video, loop, nextLoopStatus(status));
+  });
+
   const openButton = document.createElement("button");
   openButton.type = "button";
   openButton.textContent = "Open";
@@ -200,9 +216,28 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
     void deleteLoop(video, loop);
   });
 
-  tools.append(openButton, deleteButton);
+  tools.append(statusButton, openButton, deleteButton);
   row.append(label, meta, tools);
   return row;
+}
+
+function createStatusFilters(): HTMLElement {
+  const filters = document.createElement("div");
+  filters.className = "status-filters";
+
+  for (const status of ["all", "new", "hard", "done"] as const) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = status === "all" ? "All" : formatLoopStatus(status);
+    button.className = `status-filter-button${statusFilter === status ? " is-selected" : ""}`;
+    button.addEventListener("click", () => {
+      statusFilter = status;
+      render();
+    });
+    filters.append(button);
+  }
+
+  return filters;
 }
 
 function createAvatar(video: VideoLoops, size: "small" | "large"): HTMLElement {
@@ -239,6 +274,11 @@ async function deleteVideo(video: VideoLoops): Promise<void> {
 
 async function renameLoop(video: VideoLoops, loop: Loop, label: string): Promise<void> {
   await storage.renameLoop(video.videoId, loop.id, label.trim() || loop.label, new Date().toISOString());
+  await load();
+}
+
+async function setLoopStatus(video: VideoLoops, loop: Loop, status: LoopStatus): Promise<void> {
+  await storage.setLoopStatus(video.videoId, loop.id, status, new Date().toISOString());
   await load();
 }
 
@@ -329,6 +369,22 @@ function formatMinuteFromMs(value: number): string {
 
 function getVideoTitle(video: VideoLoops): string {
   return video.title || video.videoId;
+}
+
+function getLoopStatus(loop: Loop): LoopStatus {
+  return loop.status ?? "new";
+}
+
+function nextLoopStatus(status: LoopStatus): LoopStatus {
+  if (status === "new") return "hard";
+  if (status === "hard") return "done";
+  return "new";
+}
+
+function formatLoopStatus(status: LoopStatus): string {
+  if (status === "hard") return "Hard";
+  if (status === "done") return "Done";
+  return "New";
 }
 
 function normalize(value: string): string {

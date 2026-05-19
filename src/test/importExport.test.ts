@@ -92,6 +92,12 @@ describe("import/export merge", () => {
       updatedAt: "2026-05-19T12:30:00.000Z"
     });
   });
+
+  it("preserves optional loop status", () => {
+    const data = withLoops([{ ...loop("a", 10, 15, "first"), status: "hard" }]);
+
+    expect(parseImportPayload(data).videos[videoId].loops[0].status).toBe("hard");
+  });
 });
 
 function withLoops(loops: Loop[]): PhraseLoopData {

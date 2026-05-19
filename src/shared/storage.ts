@@ -1,7 +1,7 @@
 import { STORAGE_KEY } from "./constants";
 import { createEmptyData, type VideoMetadata } from "./data";
 import { parseImportPayload } from "./importExport";
-import type { Loop, PhraseLoopData, VideoLoops } from "./types";
+import type { Loop, LoopStatus, PhraseLoopData, VideoLoops } from "./types";
 
 export async function readData(): Promise<PhraseLoopData> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -55,6 +55,16 @@ export async function renameLoop(videoId: string, loopId: string, label: string,
   if (!video) return null;
 
   video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, label, updatedAt } : loop));
+  await writeData(data);
+  return video;
+}
+
+export async function setLoopStatus(videoId: string, loopId: string, status: LoopStatus, updatedAt: string): Promise<VideoLoops | null> {
+  const data = await readData();
+  const video = data.videos[videoId];
+  if (!video) return null;
+
+  video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, status, updatedAt } : loop));
   await writeData(data);
   return video;
 }

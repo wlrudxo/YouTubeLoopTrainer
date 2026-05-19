@@ -5,8 +5,11 @@ export type Loop = {
   start: number;
   end: number;
   label: string;
+  status?: LoopStatus;
   updatedAt: string;
 };
+
+export type LoopStatus = "new" | "hard" | "done";
 
 export type VideoLoops = {
   videoId: string;

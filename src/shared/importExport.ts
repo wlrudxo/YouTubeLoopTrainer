@@ -1,7 +1,7 @@
 import { DUPLICATE_TIME_EPSILON_SECONDS, SCHEMA_VERSION } from "./constants";
 import { createEmptyData, ensureVideo } from "./data";
 import { normalizeLabel } from "./labels";
-import type { ExportPayload, ImportSummary, Loop, PhraseLoopData, VideoLoops } from "./types";
+import type { ExportPayload, ImportSummary, Loop, LoopStatus, PhraseLoopData, VideoLoops } from "./types";
 
 export function createExportPayload(data: PhraseLoopData, exportedAt = new Date().toISOString()): ExportPayload {
   return {
@@ -131,6 +131,7 @@ function cloneLoop(loop: Loop): Loop {
     start: loop.start,
     end: loop.end,
     label: loop.label,
+    ...(loop.status ? { status: loop.status } : {}),
     updatedAt: loop.updatedAt
   };
 }
@@ -170,8 +171,13 @@ function isLoop(value: unknown): value is Loop {
     typeof value.start === "number" &&
     typeof value.end === "number" &&
     typeof value.label === "string" &&
+    (!("status" in value) || value.status === undefined || isLoopStatus(value.status)) &&
     typeof value.updatedAt === "string"
   );
+}
+
+function isLoopStatus(value: unknown): value is LoopStatus {
+  return value === "new" || value === "hard" || value === "done";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

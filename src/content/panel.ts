@@ -1,6 +1,6 @@
 import { APP_BUILD } from "../shared/constants";
 import { formatTime } from "../shared/time";
-import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
+import type { DraftLoop, Loop, LoopStatus, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
 import type { DebugRecord } from "./debug";
 
@@ -25,6 +25,7 @@ export type PanelActions = {
   startLoop: (loop: Loop) => void;
   stopLoop: () => void;
   renameLoop: (loop: Loop, label: string) => void;
+  setLoopStatus: (loop: Loop, status: LoopStatus) => void;
   deleteLoop: (loop: Loop) => void;
   setCollapsed: (collapsed: boolean) => void;
   setDebugExpanded: (expanded: boolean) => void;
@@ -181,6 +182,13 @@ export class PhraseLoopPanel {
     main.addEventListener("click", () => this.actions.startLoop(loop));
     row.append(main);
 
+    const status = getLoopStatus(loop);
+    const statusButton = button(formatLoopStatus(status), `Mark ${loop.label} as ${formatLoopStatus(nextLoopStatus(status))}`);
+    statusButton.className = `phraseloop-status-button is-${status}`;
+    statusButton.setAttribute("aria-label", `Loop status: ${formatLoopStatus(status)}`);
+    statusButton.addEventListener("click", () => this.actions.setLoopStatus(loop, nextLoopStatus(status)));
+    row.append(statusButton);
+
     const renameButton = button("✎", `Rename ${loop.label}`);
     renameButton.className = "phraseloop-icon-button";
     renameButton.setAttribute("aria-label", `Rename ${loop.label}`);
@@ -277,6 +285,22 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", 
   if (className) node.className = className;
   if (text) node.textContent = text;
   return node;
+}
+
+function getLoopStatus(loop: Loop): LoopStatus {
+  return loop.status ?? "new";
+}
+
+function nextLoopStatus(status: LoopStatus): LoopStatus {
+  if (status === "new") return "hard";
+  if (status === "hard") return "done";
+  return "new";
+}
+
+function formatLoopStatus(status: LoopStatus): string {
+  if (status === "hard") return "Hard";
+  if (status === "done") return "Done";
+  return "New";
 }
 
 function button(text: string, title: string): HTMLButtonElement {

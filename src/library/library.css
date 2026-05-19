@@ -206,10 +206,55 @@ textarea {
 
 .loops-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-top: 14px;
+}
+
+.loops-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.status-filter-button,
+.status-button {
+  font-weight: 700;
+}
+
+.status-filter-button.is-selected {
+  border-color: #ef4444;
+  background: #fff7f7;
+}
+
+.status-button {
+  min-width: 58px;
+}
+
+.status-button.is-new {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.status-button.is-hard {
+  border-color: #f97316;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.status-button.is-done {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  color: #15803d;
 }
 
 .loop-list {
@@ -262,5 +307,14 @@ textarea {
 
   .loop-meta {
     width: auto;
+  }
+
+  .loops-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .status-filters {
+    justify-content: flex-start;
   }
 }
