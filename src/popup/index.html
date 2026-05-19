@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PhraseLoop</title>
+    <script type="module" src="./index.ts"></script>
+  </head>
+  <body>
+    <main class="popup">
+      <header class="popup-header">
+        <h1>PhraseLoop</h1>
+      </header>
+
+      <section class="section">
+        <button id="exportButton" type="button">Export JSON</button>
+      </section>
+
+      <section class="section">
+        <fieldset>
+          <legend>Import Mode</legend>
+          <label>
+            <input type="radio" name="importMode" value="merge" checked />
+            Merge
+          </label>
+          <label>
+            <input type="radio" name="importMode" value="replace" />
+            Replace
+          </label>
+        </fieldset>
+        <input id="importFile" type="file" accept="application/json,.json" />
+      </section>
+
+      <div id="status" class="status" role="status"></div>
+    </main>
+  </body>
+</html>

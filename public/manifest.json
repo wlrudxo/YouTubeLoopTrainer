@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "PhraseLoop",
+  "version": "0.1.0",
+  "description": "Save and replay multiple A-B loops on YouTube for listening and shadowing practice.",
+  "permissions": ["storage", "unlimitedStorage"],
+  "host_permissions": ["https://www.youtube.com/*"],
+  "action": {
+    "default_popup": "popup/index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content/index.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
