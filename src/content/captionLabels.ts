@@ -1,4 +1,10 @@
-import { extractJson3CaptionLines, joinCaptionLines, type Json3CaptionEvent } from "../shared/captions";
+import {
+  extractJson3CaptionLines,
+  extractSrv3CaptionLines,
+  extractVttCaptionLines,
+  joinCaptionLines,
+  type Json3CaptionEvent
+} from "../shared/captions";
 import type { DebugLogger } from "./debug";
 
 const CUE_LOAD_TIMEOUT_MS = 900;
@@ -107,11 +113,26 @@ async function getTimedTextCaptionLabel(start: number, end: number, debug?: Debu
 
   debug?.log("captions", "selected timedtext track", describeTimedTextTrack(captionTrack));
 
+  for (const format of ["json3", "srv3", "vtt"] as const) {
+    const label = await fetchTimedTextFormat(captionTrack, format, start, end, debug);
+    if (label) return label;
+  }
+
+  return null;
+}
+
+async function fetchTimedTextFormat(
+  captionTrack: TimedTextTrack,
+  format: "json3" | "srv3" | "vtt",
+  start: number,
+  end: number,
+  debug?: DebugLogger
+): Promise<string | null> {
   try {
     const url = new URL(captionTrack.baseUrl);
-    url.searchParams.set("fmt", "json3");
+    url.searchParams.set("fmt", format);
 
-    debug?.log("captions", "fetching timedtext json3", {
+    debug?.log("captions", `fetching timedtext ${format}`, {
       host: url.host,
       path: url.pathname,
       lang: url.searchParams.get("lang"),
@@ -119,23 +140,42 @@ async function getTimedTextCaptionLabel(start: number, end: number, debug?: Debu
     });
 
     const response = await fetch(url.toString(), { credentials: "include" });
-    debug?.log("captions", "timedtext fetch response", { status: response.status, ok: response.ok });
-    if (!response.ok) return null;
+    const body = await response.text();
+    debug?.log("captions", `timedtext ${format} fetch response`, {
+      status: response.status,
+      ok: response.ok,
+      bodyLength: body.length,
+      contentType: response.headers.get("content-type"),
+      head: body.slice(0, 80)
+    });
 
-    const payload = (await response.json()) as { events?: Json3CaptionEvent[] };
-    const events = payload.events ?? [];
-    const lines = extractJson3CaptionLines(events, start, end);
+    if (!response.ok || body.trim().length === 0) return null;
+
+    const lines = extractTimedTextLines(format, body, start, end);
     const label = joinCaptionLines(lines);
-    debug?.log("captions", "timedtext event extraction complete", {
-      eventCount: events.length,
+    debug?.log("captions", `timedtext ${format} extraction complete`, {
       matchedLines: lines.length,
       label
     });
+
     return label || null;
   } catch (error) {
-    debug?.log("captions", "timedtext lookup failed", error instanceof Error ? error.message : String(error));
+    debug?.log("captions", `timedtext ${format} lookup failed`, error instanceof Error ? error.message : String(error));
     return null;
   }
+}
+
+function extractTimedTextLines(format: "json3" | "srv3" | "vtt", body: string, start: number, end: number): string[] {
+  if (format === "json3") {
+    const payload = JSON.parse(body) as { events?: Json3CaptionEvent[] };
+    return extractJson3CaptionLines(payload.events ?? [], start, end);
+  }
+
+  if (format === "srv3") {
+    return extractSrv3CaptionLines(body, start, end);
+  }
+
+  return extractVttCaptionLines(body, start, end);
 }
 
 type TimedTextTrack = {
