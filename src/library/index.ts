@@ -1,4 +1,5 @@
 import * as storage from "../shared/storage";
+import { LOOP_URL_PARAM } from "../shared/constants";
 import { formatTime } from "../shared/time";
 import type { Loop, VideoLoops } from "../shared/types";
 import "./library.css";
@@ -273,6 +274,7 @@ function getLatestUpdatedAt(video: VideoLoops): number {
 function getLoopUrl(video: VideoLoops, loop: Loop): string {
   const url = new URL(getVideoUrl(video));
   url.searchParams.set("t", `${Math.floor(loop.start)}s`);
+  url.searchParams.set(LOOP_URL_PARAM, loop.id);
   return url.toString();
 }
 

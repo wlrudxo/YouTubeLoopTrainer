@@ -18,6 +18,7 @@ import {
   getChannelTitle,
   findPanelTarget,
   findVideoElement,
+  getLoopIdFromUrl,
   getVideoIdFromUrl,
   getVideoTitle,
   getWatchUrl,
@@ -55,6 +56,7 @@ let messageTimer: number | null = null;
 let labelRefreshToken = 0;
 let captionCollector: VisibleCaptionCollector | null = null;
 let collectedCaptionLabel = "";
+let handledLoopRequestKey = "";
 
 void boot();
 
@@ -107,6 +109,7 @@ async function loadCurrentVideo(): Promise<void> {
   }
 
   mountOrRenderPanel();
+  scheduleRequestedLoopStart(videoId);
 }
 
 function mountOrRenderPanel(): void {
@@ -247,6 +250,40 @@ function startLoop(loop: Loop): void {
   loopEngine?.setVideo(video);
   loopEngine?.start(loop);
   setMessage("");
+}
+
+function scheduleRequestedLoopStart(videoId: string, attempt = 0): void {
+  const loopId = getLoopIdFromUrl();
+  if (!loopId || !state.video) return;
+
+  const requestKey = `${videoId}:${loopId}`;
+  if (handledLoopRequestKey === requestKey) return;
+
+  const loop = state.video.loops.find((item) => item.id === loopId);
+  if (!loop) {
+    debug.log("loop", "requested loop not found", { videoId, loopId });
+    return;
+  }
+
+  const video = findVideoElement();
+  if (!video) {
+    if (attempt < 20) {
+      window.setTimeout(() => scheduleRequestedLoopStart(videoId, attempt + 1), 250);
+    } else {
+      debug.log("loop", "requested loop start failed: video not found", { videoId, loopId });
+    }
+    return;
+  }
+
+  loopEngine?.setVideo(video);
+  loopEngine?.start(loop);
+  handledLoopRequestKey = requestKey;
+  state.highlightedLoopId = loop.id;
+  state.collapsed = false;
+  setMessage("Loop started.", 1400);
+  scheduleHighlightClear();
+  debug.log("loop", "started requested loop from URL", { videoId, loopId, start: loop.start, end: loop.end });
+  render();
 }
 
 function stopLoop(): void {
