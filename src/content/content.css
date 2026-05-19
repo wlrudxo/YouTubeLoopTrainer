@@ -16,8 +16,8 @@
 
 .phraseloop-header,
 .phraseloop-list-header,
-.phraseloop-save-row,
 .phraseloop-marker-row,
+.phraseloop-label-row,
 .phraseloop-loop-row {
   display: flex;
   align-items: center;
@@ -33,19 +33,12 @@
   font-weight: 700;
 }
 
-.phraseloop-marker-grid {
-  display: grid;
-  gap: 6px;
+.phraseloop-marker-row {
   margin-top: 10px;
 }
 
-.phraseloop-marker-label {
-  width: 16px;
-  font-weight: 700;
-}
-
-.phraseloop-marker-time {
-  min-width: 66px;
+.phraseloop-marker-button {
+  flex: 1;
   font-variant-numeric: tabular-nums;
 }
 
@@ -80,6 +73,10 @@
   margin-top: 10px;
 }
 
+.phraseloop-label-row {
+  gap: 6px;
+}
+
 .phraseloop-field-label,
 .phraseloop-list-header {
   font-weight: 700;
@@ -94,21 +91,6 @@
   padding: 4px 8px;
   color: #111827;
   font: inherit;
-}
-
-.phraseloop-save-row {
-  margin-top: 10px;
-}
-
-.phraseloop-save-row button {
-  flex: 1;
-}
-
-.phraseloop-shortcut {
-  min-width: 22px;
-  color: #64748b;
-  text-align: center;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .phraseloop-message {

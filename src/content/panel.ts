@@ -61,7 +61,7 @@ export class PhraseLoopPanel {
   }
 
   private render(): void {
-    const { draft, video, activeLoopId, message, highlightedLoopId, collapsed, debugRecords, debugExpanded } = this.state;
+    const { draft, video, activeLoopId, message, highlightedLoopId, collapsed } = this.state;
     const validation = validateDraftMarkers(draft.markerA, draft.markerB);
     const loops = video?.loops ?? [];
 
@@ -79,13 +79,14 @@ export class PhraseLoopPanel {
 
     if (collapsed) return;
 
-    const markerGrid = element("div", "phraseloop-marker-grid");
-    markerGrid.append(this.markerRow("A", draft.markerA, "[", this.actions.setA));
-    markerGrid.append(this.markerRow("B", draft.markerB, "]", this.actions.setB));
-    this.root.append(markerGrid);
+    const markerRow = element("div", "phraseloop-marker-row");
+    markerRow.append(this.markerButton("A", draft.markerA, this.actions.setA));
+    markerRow.append(this.markerButton("B", draft.markerB, this.actions.setB));
+    this.root.append(markerRow);
 
     const labelWrap = element("label", "phraseloop-label-wrap");
     labelWrap.append(element("span", "phraseloop-field-label", "Name"));
+    const labelRow = element("div", "phraseloop-label-row");
     const labelInput = document.createElement("input");
     labelInput.className = LABEL_INPUT_CLASS;
     labelInput.type = "text";
@@ -93,16 +94,17 @@ export class PhraseLoopPanel {
     labelInput.placeholder = validation.ok ? "Loop label" : "Set A and B markers";
     labelInput.disabled = !validation.ok;
     labelInput.addEventListener("input", () => this.actions.updateDraftLabel(labelInput.value));
-    labelWrap.append(labelInput);
-    this.root.append(labelWrap);
+    labelRow.append(labelInput);
 
-    const saveRow = element("div", "phraseloop-save-row");
-    const saveButton = button("Save Loop", "Save Loop");
+    const saveButton = button("✓", "Save Loop");
+    saveButton.className = "phraseloop-icon-button";
     saveButton.disabled = !validation.ok;
+    saveButton.setAttribute("aria-label", "Save Loop");
     saveButton.addEventListener("click", this.actions.save);
-    saveRow.append(saveButton);
-    saveRow.append(element("span", "phraseloop-shortcut", "\\"));
-    this.root.append(saveRow);
+    labelRow.append(saveButton);
+
+    labelWrap.append(labelRow);
+    this.root.append(labelWrap);
 
     const messageText = message || (!validation.ok && (draft.markerA !== null || draft.markerB !== null) ? validation.message : "");
     if (messageText) {
@@ -129,25 +131,13 @@ export class PhraseLoopPanel {
     }
     this.root.append(list);
 
-    const debugToggle = button(`Debug (${debugRecords.length})`, "Show caption diagnostics");
-    debugToggle.className = "phraseloop-debug-toggle";
-    debugToggle.addEventListener("click", () => this.actions.setDebugExpanded(!debugExpanded));
-    this.root.append(debugToggle);
-
-    if (debugExpanded) {
-      this.root.append(this.renderDebugRecords(debugRecords));
-    }
   }
 
-  private markerRow(label: string, value: number | null, shortcut: string, action: () => void): HTMLElement {
-    const row = element("div", "phraseloop-marker-row");
-    row.append(element("span", "phraseloop-marker-label", label));
-    row.append(element("span", "phraseloop-marker-time", value === null ? "--:--.-" : formatTime(value)));
-    const setButton = button(`Set ${label}`, `Set ${label}`);
+  private markerButton(label: string, value: number | null, action: () => void): HTMLElement {
+    const setButton = button(`${label} ${value === null ? "--:--.-" : formatTime(value)}`, `Set ${label}`);
+    setButton.className = "phraseloop-marker-button";
     setButton.addEventListener("click", action);
-    row.append(setButton);
-    row.append(element("span", "phraseloop-shortcut", shortcut));
-    return row;
+    return setButton;
   }
 
   private loopRow(loop: Loop, active: boolean, highlighted: boolean): HTMLElement {
@@ -201,44 +191,6 @@ export class PhraseLoopPanel {
     input.focus();
     input.select();
   }
-
-  private renderDebugRecords(records: DebugRecord[]): HTMLElement {
-    const outer = element("div", "phraseloop-debug-wrap");
-
-    const tools = element("div", "phraseloop-debug-tools");
-    const count = element("span", "phraseloop-debug-count", `Showing ${records.length} records`);
-    const copyButton = button("Copy Debug", "Copy all debug records");
-    copyButton.className = "phraseloop-text-button";
-    copyButton.addEventListener("click", () => {
-      void copyDebugRecords(records);
-    });
-    tools.append(count, copyButton);
-    outer.append(tools);
-
-    const wrap = element("div", "phraseloop-debug");
-
-    if (records.length === 0) {
-      wrap.append(element("div", "phraseloop-empty", "No debug records yet."));
-      outer.append(wrap);
-      return outer;
-    }
-
-    for (const record of records) {
-      const item = element("div", "phraseloop-debug-record");
-      const summary = element("div", "phraseloop-debug-summary", `${record.time} ${record.area}: ${record.message}`);
-      item.append(summary);
-
-      if (record.details !== undefined) {
-        const details = element("pre", "phraseloop-debug-details", formatDetails(record.details));
-        item.append(details);
-      }
-
-      wrap.append(item);
-    }
-
-    outer.append(wrap);
-    return outer;
-  }
 }
 
 export function getExistingPanel(): HTMLElement | null {
@@ -258,25 +210,4 @@ function button(text: string, title: string): HTMLButtonElement {
   node.textContent = text;
   node.title = title;
   return node;
-}
-
-function formatDetails(details: unknown): string {
-  if (typeof details === "string") return details;
-
-  try {
-    return JSON.stringify(details, null, 2);
-  } catch {
-    return String(details);
-  }
-}
-
-async function copyDebugRecords(records: DebugRecord[]): Promise<void> {
-  const text = records
-    .map((record) => {
-      const details = record.details === undefined ? "" : `\n${formatDetails(record.details)}`;
-      return `${record.time} ${record.area}: ${record.message}${details}`;
-    })
-    .join("\n\n");
-
-  await navigator.clipboard.writeText(text);
 }
