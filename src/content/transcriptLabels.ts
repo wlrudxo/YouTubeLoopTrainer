@@ -17,6 +17,9 @@ type TranscriptResponse = {
 };
 
 export async function getTranscriptLabelForRange(start: number, end: number, debug?: DebugLogger): Promise<string | null> {
+  const domLabel = getTranscriptDomLabelForRange(start, end, debug);
+  if (domLabel) return domLabel;
+
   const apiKey = findInnertubeApiKey();
   const params = findTranscriptParams(debug);
   const clientContexts = findTranscriptClientContexts();
@@ -38,6 +41,66 @@ export async function getTranscriptLabelForRange(start: number, end: number, deb
   }
 
   return null;
+}
+
+function getTranscriptDomLabelForRange(start: number, end: number, debug?: DebugLogger): string | null {
+  const segments = getTranscriptDomSegments();
+  const lines = segments.filter((segment) => segment.end > start && segment.start < end).map((segment) => segment.text);
+  const label = joinCaptionLines(lines);
+
+  debug?.log("transcript", "transcript DOM lookup", {
+    segmentCount: segments.length,
+    matchedLines: lines.length,
+    label
+  });
+
+  return label || null;
+}
+
+function getTranscriptDomSegments(): TranscriptSegment[] {
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>("ytd-transcript-segment-renderer"));
+  const raw = nodes
+    .map((node) => {
+      const timeText = readTranscriptSegmentTime(node);
+      const text = readTranscriptSegmentText(node);
+      const start = parseTranscriptTimestamp(timeText);
+      return start === null || !text ? null : { start, text };
+    })
+    .filter((segment): segment is { start: number; text: string } => segment !== null)
+    .sort((a, b) => a.start - b.start);
+
+  return raw.map((segment, index) => ({
+    start: segment.start,
+    end: raw[index + 1]?.start ?? segment.start + 4,
+    text: segment.text
+  }));
+}
+
+function readTranscriptSegmentTime(node: HTMLElement): string {
+  return (
+    node.querySelector<HTMLElement>(".segment-start-offset")?.textContent?.trim() ??
+    node.querySelector<HTMLElement>(".segment-timestamp")?.textContent?.trim() ??
+    ""
+  );
+}
+
+function readTranscriptSegmentText(node: HTMLElement): string {
+  return (
+    node.querySelector<HTMLElement>(".segment-text")?.textContent?.trim() ??
+    node.querySelector<HTMLElement>("yt-formatted-string")?.textContent?.trim() ??
+    ""
+  );
+}
+
+function parseTranscriptTimestamp(value: string): number | null {
+  const parts = value.split(":").map((part) => Number(part.trim()));
+  if (parts.length < 2 || parts.some((part) => !Number.isFinite(part))) return null;
+
+  let seconds = 0;
+  for (const part of parts) {
+    seconds = seconds * 60 + part;
+  }
+  return seconds;
 }
 
 async function fetchTranscriptLabel(
