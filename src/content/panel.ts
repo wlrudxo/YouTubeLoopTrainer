@@ -175,7 +175,7 @@ export class PhraseLoopPanel {
     const row = element("div", `phraseloop-loop-row${active ? " is-active" : ""}${highlighted ? " is-highlighted" : ""}`);
     const main = button("", `Play ${loop.label}`);
     main.className = "phraseloop-loop-main";
-    main.innerHTML = `<span class="phraseloop-play">&gt;</span><span class="phraseloop-loop-label"></span><span class="phraseloop-loop-time"></span>`;
+    main.innerHTML = `<span class="phraseloop-loop-label"></span><span class="phraseloop-loop-time"></span>`;
     main.querySelector(".phraseloop-loop-label")!.textContent = loop.label;
     main.querySelector(".phraseloop-loop-time")!.textContent =
       `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.updatedAt)}`;

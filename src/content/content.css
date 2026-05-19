@@ -180,17 +180,13 @@
 
 .phraseloop-loop-main {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   flex: 1;
-  gap: 2px 6px;
+  gap: 2px;
   min-width: 0;
   border: 0 !important;
   background: transparent !important;
   text-align: left;
-}
-
-.phraseloop-play {
-  grid-row: span 2;
 }
 
 .phraseloop-loop-label {
