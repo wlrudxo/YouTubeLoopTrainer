@@ -162,6 +162,7 @@
 }
 
 .phraseloop-loop-row {
+  align-items: stretch;
   padding: 6px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
@@ -206,6 +207,22 @@
 .phraseloop-loop-time {
   color: #64748b;
   font-variant-numeric: tabular-nums;
+}
+
+.phraseloop-loop-actions {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.phraseloop-loop-icon-row {
+  display: flex;
+  gap: 4px;
+}
+
+.phraseloop-loop-actions .phraseloop-status-button {
+  width: 60px;
 }
 
 .phraseloop-debug-toggle {

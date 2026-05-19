@@ -182,23 +182,27 @@ export class PhraseLoopPanel {
     main.addEventListener("click", () => this.actions.startLoop(loop));
     row.append(main);
 
-    const status = getLoopStatus(loop);
-    const statusButton = button(formatLoopStatus(status), `Mark ${loop.label} as ${formatLoopStatus(nextLoopStatus(status))}`);
-    statusButton.className = `phraseloop-status-button is-${status}`;
-    statusButton.setAttribute("aria-label", `Loop status: ${formatLoopStatus(status)}`);
-    statusButton.addEventListener("click", () => this.actions.setLoopStatus(loop, nextLoopStatus(status)));
-    row.append(statusButton);
+    const actions = element("div", "phraseloop-loop-actions");
+    const iconRow = element("div", "phraseloop-loop-icon-row");
 
     const renameButton = button("✎", `Rename ${loop.label}`);
     renameButton.className = "phraseloop-icon-button";
     renameButton.setAttribute("aria-label", `Rename ${loop.label}`);
     renameButton.addEventListener("click", () => this.renderRenameRow(row, loop));
-    row.append(renameButton);
+    iconRow.append(renameButton);
 
     const deleteButton = button("x", `Delete ${loop.label}`);
     deleteButton.className = "phraseloop-icon-button";
     deleteButton.addEventListener("click", () => this.actions.deleteLoop(loop));
-    row.append(deleteButton);
+    iconRow.append(deleteButton);
+
+    const status = getLoopStatus(loop);
+    const statusButton = button(formatLoopStatus(status), `Mark ${loop.label} as ${formatLoopStatus(nextLoopStatus(status))}`);
+    statusButton.className = `phraseloop-status-button is-${status}`;
+    statusButton.setAttribute("aria-label", `Loop status: ${formatLoopStatus(status)}`);
+    statusButton.addEventListener("click", () => this.actions.setLoopStatus(loop, nextLoopStatus(status)));
+    actions.append(iconRow, statusButton);
+    row.append(actions);
     return row;
   }
 
