@@ -10,11 +10,11 @@ export function validateDraftMarkers(markerA: number | null, markerB: number | n
     return { ok: false, error: "missing-b", message: "Set marker B first." };
   }
 
-  const start = Math.min(markerA, markerB);
-  const end = Math.max(markerA, markerB);
+  const start = markerA;
+  const end = markerB;
 
   if (start >= end) {
-    return { ok: false, error: "invalid-order", message: "Loop start must be before loop end." };
+    return { ok: false, error: "invalid-order", message: "Set marker B after marker A." };
   }
 
   if (end - start < MIN_LOOP_SECONDS) {

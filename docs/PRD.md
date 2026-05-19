@@ -49,17 +49,19 @@ Requirements:
 - Read `HTMLVideoElement.currentTime` from the YouTube page.
 - Support setting marker A.
 - Support setting marker B.
-- A and B may be set in any order.
+- Markers must be set in A then B order.
+- Setting A always starts a new draft, clears B, resets the draft label dirty flag, and restarts visible caption collection from that point.
+- Setting B before A is rejected.
 - On save, compute:
-  - `start = min(A, B)`
-  - `end = max(A, B)`
+  - `start = A`
+  - `end = B`
 - Marker setting must not change playback position or playback state.
 
 Validation:
 
 - Save is disabled or rejected if A is missing.
 - Save is disabled or rejected if B is missing.
-- Save is rejected if `start >= end`.
+- Save is rejected if `B <= A`.
 - Save is rejected if `end - start < 1.0` seconds.
 
 ### 4.2 Draft Label

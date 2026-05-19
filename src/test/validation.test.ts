@@ -14,7 +14,11 @@ describe("draft marker validation", () => {
     expect(validateDraftMarkers(10, 10.5)).toMatchObject({ ok: false, error: "too-short" });
   });
 
-  it("sorts reversed marker order", () => {
-    expect(validateDraftMarkers(20, 10)).toEqual({ ok: true, start: 10, end: 20 });
+  it("rejects marker B before marker A", () => {
+    expect(validateDraftMarkers(20, 10)).toMatchObject({ ok: false, error: "invalid-order" });
+  });
+
+  it("accepts marker B after marker A", () => {
+    expect(validateDraftMarkers(10, 20)).toEqual({ ok: true, start: 10, end: 20 });
   });
 });

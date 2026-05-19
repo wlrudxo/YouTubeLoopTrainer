@@ -444,7 +444,7 @@ Required cases:
 - Validate missing A.
 - Validate missing B.
 - Validate under-1-second loop rejection.
-- Sort reversed marker order.
+- Reject reversed marker order.
 - Normalize labels.
 - Merge same ID.
 - Update same ID when imported `updatedAt` is newer.

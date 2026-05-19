@@ -128,14 +128,6 @@ function registerGlobalShortcuts(): void {
 }
 
 function setA(): void {
-  setMarker("markerA");
-}
-
-function setB(): void {
-  setMarker("markerB");
-}
-
-function setMarker(key: "markerA" | "markerB"): void {
   const video = findVideoElement();
   if (!video) {
     setMessage("Could not find the YouTube video.");
@@ -143,9 +135,42 @@ function setMarker(key: "markerA" | "markerB"): void {
   }
 
   loopEngine?.setVideo(video);
-  state.draft[key] = video.currentTime;
-  debug.log("draft", `set ${key}`, { currentTime: video.currentTime });
-  updateCaptionCollection();
+  state.draft.markerA = video.currentTime;
+  state.draft.markerB = null;
+  state.draft.label = "";
+  state.draft.labelDirty = false;
+  collectedCaptionLabel = "";
+  captionCollector?.start();
+  debug.log("draft", "set markerA", { currentTime: video.currentTime, resetDraft: true });
+  void refreshDefaultLabel();
+  setMessage("");
+  render();
+}
+
+function setB(): void {
+  const video = findVideoElement();
+  if (!video) {
+    setMessage("Could not find the YouTube video.");
+    return;
+  }
+
+  if (state.draft.markerA === null) {
+    setMessage("Set marker A first.");
+    debug.log("draft", "ignored markerB without markerA", { currentTime: video.currentTime });
+    render();
+    return;
+  }
+
+  loopEngine?.setVideo(video);
+  state.draft.markerB = video.currentTime;
+  debug.log("draft", "set markerB", { currentTime: video.currentTime });
+  const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
+  if (validation.ok) {
+    collectedCaptionLabel = captionCollector?.stop() ?? "";
+  } else {
+    collectedCaptionLabel = "";
+    debug.log("collector", "kept running after invalid markerB", validation);
+  }
   void refreshDefaultLabel();
   setMessage("");
   render();
@@ -266,8 +291,8 @@ async function refreshDefaultLabel(): Promise<void> {
   const markersStillMatch =
     state.draft.markerA !== null &&
     state.draft.markerB !== null &&
-    Math.min(state.draft.markerA, state.draft.markerB) === validation.start &&
-    Math.max(state.draft.markerA, state.draft.markerB) === validation.end;
+    state.draft.markerA === validation.start &&
+    state.draft.markerB === validation.end;
 
   if (captionLabel && token === labelRefreshToken && !state.draft.labelDirty && markersStillMatch) {
     state.draft.label = captionLabel;
@@ -339,20 +364,6 @@ function createEmptyDraft(): DraftLoop {
     label: "",
     labelDirty: false
   };
-}
-
-function updateCaptionCollection(): void {
-  const markerCount = Number(state.draft.markerA !== null) + Number(state.draft.markerB !== null);
-
-  if (markerCount === 1) {
-    collectedCaptionLabel = "";
-    captionCollector?.start();
-    return;
-  }
-
-  if (markerCount === 2) {
-    collectedCaptionLabel = captionCollector?.stop() ?? "";
-  }
 }
 
 window.addEventListener("pagehide", () => {
