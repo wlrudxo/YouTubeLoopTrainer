@@ -13,6 +13,7 @@ export type PanelState = {
   collapsed: boolean;
   debugRecords: DebugRecord[];
   debugExpanded: boolean;
+  debugEnabled: boolean;
 };
 
 export type PanelActions = {
@@ -54,6 +55,10 @@ export class PhraseLoopPanel {
     this.render();
   }
 
+  unmount(): void {
+    this.root.remove();
+  }
+
   update(state: PanelState): void {
     this.state = state;
     this.render();
@@ -64,7 +69,7 @@ export class PhraseLoopPanel {
   }
 
   private render(): void {
-    const { draft, video, activeLoopId, message, highlightedLoopId, collapsed, debugRecords, debugExpanded } = this.state;
+    const { draft, video, activeLoopId, message, highlightedLoopId, collapsed, debugRecords, debugExpanded, debugEnabled } = this.state;
     const validation = validateDraftMarkers(draft.markerA, draft.markerB);
     const loops = video?.loops ?? [];
 
@@ -154,13 +159,15 @@ export class PhraseLoopPanel {
     }
     this.root.append(list);
 
-    const debugToggle = button(`Debug (${debugRecords.length})`, "Show caption diagnostics");
-    debugToggle.className = "phraseloop-debug-toggle";
-    debugToggle.addEventListener("click", () => this.actions.setDebugExpanded(!debugExpanded));
-    this.root.append(debugToggle);
+    if (debugEnabled) {
+      const debugToggle = button(`Debug (${debugRecords.length})`, "Show caption diagnostics");
+      debugToggle.className = "phraseloop-debug-toggle";
+      debugToggle.addEventListener("click", () => this.actions.setDebugExpanded(!debugExpanded));
+      this.root.append(debugToggle);
 
-    if (debugExpanded) {
-      this.root.append(this.renderDebugRecords(debugRecords));
+      if (debugExpanded) {
+        this.root.append(this.renderDebugRecords(debugRecords));
+      }
     }
   }
 
@@ -278,10 +285,6 @@ export class PhraseLoopPanel {
     outer.append(wrap);
     return outer;
   }
-}
-
-export function getExistingPanel(): HTMLElement | null {
-  return document.getElementById(PANEL_ID);
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = ""): HTMLElementTagNameMap[K] {

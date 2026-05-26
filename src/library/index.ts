@@ -26,10 +26,26 @@ searchInput?.addEventListener("input", () => {
 void load();
 
 async function load(): Promise<void> {
-  const data = await storage.readData();
-  videos = Object.values(data.videos).sort(compareVideos);
-  ensureSelectedVideo();
-  render();
+  try {
+    const data = await storage.readData();
+    videos = Object.values(data.videos).sort(compareVideos);
+    ensureSelectedVideo();
+    render();
+  } catch (error) {
+    videos = [];
+    selectedVideoId = null;
+    if (summaryEl) {
+      summaryEl.textContent = error instanceof Error ? error.message : "Failed to load PhraseLoop data.";
+    }
+    if (videoList) {
+      videoList.innerHTML = "";
+      videoList.append(createEmpty("Open Settings to import a valid backup."));
+    }
+    if (detailPanel) {
+      detailPanel.innerHTML = "";
+      detailPanel.append(createEmpty("PhraseLoop data could not be loaded."));
+    }
+  }
 }
 
 function render(): void {

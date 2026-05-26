@@ -3,6 +3,13 @@ import { createEmptyData, type VideoMetadata } from "./data";
 import { parseImportPayload } from "./importExport";
 import type { Loop, LoopStatus, PhraseLoopData, VideoLoops } from "./types";
 
+export class PhraseLoopStorageError extends Error {
+  constructor(message = "Stored PhraseLoop data is invalid. Export a backup or import valid data from settings before saving new changes.") {
+    super(message);
+    this.name = "PhraseLoopStorageError";
+  }
+}
+
 export async function readData(): Promise<PhraseLoopData> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
   const raw = result[STORAGE_KEY];
@@ -13,8 +20,9 @@ export async function readData(): Promise<PhraseLoopData> {
 
   try {
     return parseImportPayload(raw);
-  } catch {
-    return createEmptyData();
+  } catch (error) {
+    console.warn("[PhraseLoop] Failed to parse stored data", error);
+    throw new PhraseLoopStorageError();
   }
 }
 
@@ -65,16 +73,6 @@ export async function setLoopStatus(videoId: string, loopId: string, status: Loo
   if (!video) return null;
 
   video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, status, updatedAt } : loop));
-  await writeData(data);
-  return video;
-}
-
-export async function renameVideo(videoId: string, title: string): Promise<VideoLoops | null> {
-  const data = await readData();
-  const video = data.videos[videoId];
-  if (!video) return null;
-
-  video.title = title.trim() || video.title;
   await writeData(data);
   return video;
 }

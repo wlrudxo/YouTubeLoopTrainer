@@ -1,4 +1,4 @@
-import { ensureVideo } from "../shared/data";
+import { createEmptyData, ensureVideo } from "../shared/data";
 import { createLoopId } from "../shared/ids";
 import { resolveLoopLabel } from "../shared/labels";
 import * as storage from "../shared/storage";
@@ -45,7 +45,7 @@ const state: AppState = {
   debugExpanded: false
 };
 
-const debug = new DebugLogger();
+const debug = new DebugLogger(new URL(window.location.href).searchParams.get("pl_debug") === "1");
 
 let panel: PhraseLoopPanel | null = null;
 let loopEngine: LoopEngine | null = null;
@@ -78,7 +78,10 @@ async function boot(): Promise<void> {
 
 async function loadCurrentVideo(): Promise<void> {
   const videoId = getVideoIdFromUrl();
-  if (!videoId) return;
+  if (!videoId) {
+    resetCurrentVideoState();
+    return;
+  }
 
   debug.log("app", "loading video", { videoId, url: window.location.href });
   state.videoId = videoId;
@@ -90,7 +93,16 @@ async function loadCurrentVideo(): Promise<void> {
   loopEngine?.stop();
   loopEngine?.setVideo(findVideoElement());
 
-  const existing = await storage.getVideo(videoId);
+  let existing: VideoLoops | null = null;
+  try {
+    existing = await storage.getVideo(videoId);
+  } catch (error) {
+    state.video = ensureVideo(createEmptyData(), videoId, getVideoTitle(), getWatchUrl(videoId), getCurrentVideoMetadata());
+    setMessage(formatStorageError(error));
+    mountOrRenderPanel();
+    return;
+  }
+
   if (existing) {
     const metadata = getCurrentVideoMetadata();
     state.video = {
@@ -100,16 +112,34 @@ async function loadCurrentVideo(): Promise<void> {
       channelTitle: metadata.channelTitle || existing.channelTitle,
       channelAvatarUrl: metadata.channelAvatarUrl || existing.channelAvatarUrl
     };
-    await storage.upsertVideo(state.video);
+    try {
+      await storage.upsertVideo(state.video);
+    } catch (error) {
+      setMessage(formatStorageError(error));
+    }
     debug.log("storage", "loaded existing video loops", { videoId, loops: existing.loops.length });
   } else {
-    const data = await storage.readData();
-    state.video = ensureVideo(data, videoId, getVideoTitle(), getWatchUrl(videoId), getCurrentVideoMetadata());
+    state.video = ensureVideo(createEmptyData(), videoId, getVideoTitle(), getWatchUrl(videoId), getCurrentVideoMetadata());
     debug.log("storage", "created in-memory video entry", { videoId });
   }
 
   mountOrRenderPanel();
   scheduleRequestedLoopStart(videoId);
+}
+
+function resetCurrentVideoState(): void {
+  state.videoId = null;
+  state.video = null;
+  state.draft = createEmptyDraft();
+  state.message = "";
+  state.highlightedLoopId = null;
+  state.debugExpanded = false;
+  collectedCaptionLabel = "";
+  handledLoopRequestKey = "";
+  captionCollector?.reset();
+  loopEngine?.stop();
+  loopEngine?.setVideo(null);
+  panel?.unmount();
 }
 
 function mountOrRenderPanel(): void {
@@ -232,7 +262,13 @@ async function saveDraftLoop(): Promise<void> {
     updatedAt: new Date().toISOString()
   };
 
-  state.video = await storage.addLoop(state.videoId, getVideoTitle(), getWatchUrl(state.videoId), loop, getCurrentVideoMetadata());
+  try {
+    state.video = await storage.addLoop(state.videoId, getVideoTitle(), getWatchUrl(state.videoId), loop, getCurrentVideoMetadata());
+  } catch (error) {
+    setMessage(formatStorageError(error));
+    render();
+    return;
+  }
   debug.log("storage", "saved loop", loop);
   state.draft = createEmptyDraft();
   collectedCaptionLabel = "";
@@ -304,7 +340,13 @@ async function saveProgress(): Promise<void> {
     return;
   }
 
-  state.video = await storage.saveProgress(state.videoId, video.currentTime, new Date().toISOString());
+  try {
+    state.video = await storage.saveProgress(state.videoId, video.currentTime, new Date().toISOString());
+  } catch (error) {
+    setMessage(formatStorageError(error));
+    render();
+    return;
+  }
   setMessage("Progress saved.", 1600);
   debug.log("progress", "saved progress", { videoId: state.videoId, time: video.currentTime });
   render();
@@ -336,14 +378,22 @@ async function renameLoop(loop: Loop, nextLabel: string): Promise<void> {
   if (!state.videoId) return;
 
   const label = nextLabel.trim() || loop.label;
-  state.video = await storage.renameLoop(state.videoId, loop.id, label, new Date().toISOString());
+  try {
+    state.video = await storage.renameLoop(state.videoId, loop.id, label, new Date().toISOString());
+  } catch (error) {
+    setMessage(formatStorageError(error));
+  }
   render();
 }
 
 async function setLoopStatus(loop: Loop, status: LoopStatus): Promise<void> {
   if (!state.videoId) return;
 
-  state.video = await storage.setLoopStatus(state.videoId, loop.id, status, new Date().toISOString());
+  try {
+    state.video = await storage.setLoopStatus(state.videoId, loop.id, status, new Date().toISOString());
+  } catch (error) {
+    setMessage(formatStorageError(error));
+  }
   debug.log("loop", "updated loop status", { id: loop.id, status });
   render();
 }
@@ -357,7 +407,11 @@ async function deleteLoop(loop: Loop): Promise<void> {
     loopEngine.stop();
   }
 
-  state.video = await storage.deleteLoop(state.videoId, loop.id);
+  try {
+    state.video = await storage.deleteLoop(state.videoId, loop.id);
+  } catch (error) {
+    setMessage(formatStorageError(error));
+  }
   render();
 }
 
@@ -478,7 +532,8 @@ function toPanelState(): PanelState {
     highlightedLoopId: state.highlightedLoopId,
     collapsed: state.collapsed,
     debugRecords: debug.getRecords(),
-    debugExpanded: state.debugExpanded
+    debugExpanded: state.debugExpanded,
+    debugEnabled: debug.isEnabled()
   };
 }
 
@@ -496,6 +551,10 @@ function getCurrentVideoMetadata(): { channelTitle?: string; channelAvatarUrl?: 
     channelTitle: getChannelTitle() || undefined,
     channelAvatarUrl: getChannelAvatarUrl() || undefined
   };
+}
+
+function formatStorageError(error: unknown): string {
+  return error instanceof Error ? error.message : "PhraseLoop storage failed.";
 }
 
 window.addEventListener("pagehide", () => {

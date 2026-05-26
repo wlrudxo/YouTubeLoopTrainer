@@ -25,9 +25,19 @@ searchInput?.addEventListener("input", () => {
 void loadLibrary();
 
 async function loadLibrary(): Promise<void> {
-  const data = await storage.readData();
-  videos = Object.values(data.videos).sort(compareVideos);
-  renderVideos();
+  try {
+    const data = await storage.readData();
+    videos = Object.values(data.videos).sort(compareVideos);
+    renderVideos();
+  } catch (error) {
+    if (summaryEl) {
+      summaryEl.textContent = error instanceof Error ? error.message : "Failed to load PhraseLoop data.";
+    }
+    if (videoList) {
+      videoList.innerHTML = "";
+      videoList.append(createEmptyState("Open Settings to import a valid backup."));
+    }
+  }
 }
 
 function renderVideos(): void {
