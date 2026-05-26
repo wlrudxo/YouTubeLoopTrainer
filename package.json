@@ -1,6 +1,6 @@
 {
   "name": "phraseloop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Chrome Extension for saving and replaying multiple A-B loops on YouTube.",
   "type": "module",
   "directories": {

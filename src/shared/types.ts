@@ -33,6 +33,8 @@ export type PhraseLoopData = {
 export type DraftLoop = {
   markerA: number | null;
   markerB: number | null;
+  trimContextStart: number | null;
+  trimContextEnd: number | null;
   label: string;
   labelDirty: boolean;
 };

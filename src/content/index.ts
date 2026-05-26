@@ -3,6 +3,7 @@ import { createLoopId } from "../shared/ids";
 import { resolveLoopLabel } from "../shared/labels";
 import * as storage from "../shared/storage";
 import { APP_BUILD } from "../shared/constants";
+import { getVisibleCaptionText } from "../shared/captions";
 import { formatRangeLabel } from "../shared/time";
 import type { DraftLoop, Loop, LoopStatus, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
@@ -34,6 +35,8 @@ type AppState = {
   collapsed: boolean;
   debugExpanded: boolean;
 };
+
+const DRAFT_LOOP_ID = "__phraseloop_draft__";
 
 const state: AppState = {
   videoId: null,
@@ -153,10 +156,14 @@ function mountOrRenderPanel(): void {
     panel = new PhraseLoopPanel(toPanelState(), {
       setA,
       setB,
+      copyCaption: () => void copyCaption(),
       save: () => void saveDraftLoop(),
       saveProgress,
       goProgress,
+      updateDraftRange,
       updateDraftLabel,
+      previewDraft: previewDraftLoop,
+      toggleDraftLoop,
       startLoop,
       stopLoop,
       renameLoop: (loop, label) => void renameLoop(loop, label),
@@ -223,15 +230,45 @@ function setB(): void {
   const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
   if (!validation.ok) {
     debug.log("collector", "stopped after invalid markerB", validation);
+    state.draft.trimContextStart = null;
+    state.draft.trimContextEnd = null;
+  } else {
+    state.draft.trimContextStart = Math.max(0, validation.start - 3);
+    state.draft.trimContextEnd = validation.end + 3;
   }
   void refreshDefaultLabel();
   setMessage("");
   render();
 }
 
+async function copyCaption(): Promise<void> {
+  const caption = getVisibleCaptionText();
+  if (!caption) {
+    setMessage("No visible caption.");
+    render();
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(caption);
+    setMessage("Caption copied.", 1400);
+  } catch {
+    setMessage("Could not copy caption.");
+  }
+  render();
+}
+
 function updateDraftLabel(label: string): void {
   state.draft.label = label;
   state.draft.labelDirty = true;
+}
+
+function updateDraftRange(start: number, end: number): void {
+  state.draft.markerA = roundToTenth(start);
+  state.draft.markerB = roundToTenth(end);
+  void refreshDefaultLabel();
+  syncActiveDraftLoop();
+  render();
 }
 
 async function saveDraftLoop(): Promise<void> {
@@ -292,6 +329,56 @@ function startLoop(loop: Loop): void {
   loopEngine?.setVideo(video);
   loopEngine?.start(loop);
   setMessage("");
+}
+
+function previewDraftLoop(): void {
+  const video = findVideoElement();
+  const loop = createDraftPlaybackLoop();
+  if (!video || !loop) {
+    setMessage("Set a valid loop first.");
+    render();
+    return;
+  }
+
+  loopEngine?.setVideo(video);
+  loopEngine?.playOnce(loop);
+  setMessage("");
+  render();
+}
+
+function toggleDraftLoop(): void {
+  if (loopEngine?.getActiveLoop()?.id === DRAFT_LOOP_ID) {
+    loopEngine.stop();
+    render();
+    return;
+  }
+
+  const video = findVideoElement();
+  const loop = createDraftPlaybackLoop();
+  if (!video || !loop) {
+    setMessage("Set a valid loop first.");
+    render();
+    return;
+  }
+
+  loopEngine?.setVideo(video);
+  loopEngine?.start(loop);
+  setMessage("");
+  render();
+}
+
+function syncActiveDraftLoop(): void {
+  if (loopEngine?.getActiveLoop()?.id !== DRAFT_LOOP_ID) return;
+
+  const video = findVideoElement();
+  const loop = createDraftPlaybackLoop();
+  if (!video || !loop) {
+    loopEngine.stop();
+    return;
+  }
+
+  loopEngine.setVideo(video);
+  loopEngine.updateActiveLoop(loop);
 }
 
 function scheduleRequestedLoopStart(videoId: string, attempt = 0): void {
@@ -533,6 +620,7 @@ function toPanelState(): PanelState {
     message: state.message,
     highlightedLoopId: state.highlightedLoopId,
     collapsed: state.collapsed,
+    draftLoopActive: loopEngine?.getActiveLoop()?.id === DRAFT_LOOP_ID,
     debugRecords: debug.getRecords(),
     debugExpanded: state.debugExpanded,
     debugEnabled: debug.isEnabled()
@@ -543,9 +631,31 @@ function createEmptyDraft(): DraftLoop {
   return {
     markerA: null,
     markerB: null,
+    trimContextStart: null,
+    trimContextEnd: null,
     label: "",
     labelDirty: false
   };
+}
+
+function createDraftPlaybackLoop(): Loop | null {
+  const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
+  if (!validation.ok) return null;
+
+  const now = new Date().toISOString();
+  return {
+    id: DRAFT_LOOP_ID,
+    start: validation.start,
+    end: validation.end,
+    label: "Draft loop",
+    status: "new",
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function roundToTenth(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function getCurrentVideoMetadata(): { channelTitle?: string; channelAvatarUrl?: string } {
