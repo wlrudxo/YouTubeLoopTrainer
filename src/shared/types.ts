@@ -6,6 +6,7 @@ export type Loop = {
   end: number;
   label: string;
   status?: LoopStatus;
+  createdAt: string;
   updatedAt: string;
 };
 

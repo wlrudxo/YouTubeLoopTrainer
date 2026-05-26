@@ -185,7 +185,7 @@ export class PhraseLoopPanel {
     main.innerHTML = `<span class="phraseloop-loop-label"></span><span class="phraseloop-loop-time"></span>`;
     main.querySelector(".phraseloop-loop-label")!.textContent = loop.label;
     main.querySelector(".phraseloop-loop-time")!.textContent =
-      `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.updatedAt)}`;
+      `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.createdAt)}`;
     main.addEventListener("click", () => this.actions.startLoop(loop));
     row.append(main);
 

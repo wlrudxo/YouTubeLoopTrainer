@@ -253,13 +253,15 @@ async function saveDraftLoop(): Promise<void> {
     }
   }
 
+  const now = new Date().toISOString();
   const loop: Loop = {
     id: createLoopId(),
     start: validation.start,
     end: validation.end,
     label: resolveLoopLabel(state.draft.label, validation.start, validation.end),
     status: "new",
-    updatedAt: new Date().toISOString()
+    createdAt: now,
+    updatedAt: now
   };
 
   try {

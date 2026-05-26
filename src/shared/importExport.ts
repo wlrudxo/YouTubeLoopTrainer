@@ -132,6 +132,7 @@ function cloneLoop(loop: Loop): Loop {
     end: loop.end,
     label: loop.label,
     ...(loop.status ? { status: loop.status } : {}),
+    createdAt: loop.createdAt,
     updatedAt: loop.updatedAt
   };
 }
@@ -172,6 +173,7 @@ function isLoop(value: unknown): value is Loop {
     typeof value.end === "number" &&
     typeof value.label === "string" &&
     (!("status" in value) || value.status === undefined || isLoopStatus(value.status)) &&
+    typeof value.createdAt === "string" &&
     typeof value.updatedAt === "string"
   );
 }

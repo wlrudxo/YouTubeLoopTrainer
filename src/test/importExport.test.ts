@@ -98,6 +98,12 @@ describe("import/export merge", () => {
 
     expect(parseImportPayload(data).videos[videoId].loops[0].status).toBe("hard");
   });
+
+  it("preserves loop creation dates", () => {
+    const data = withLoops([loop("a", 10, 15, "first", "2026-05-19T12:00:00.000Z", "2026-05-19T13:00:00.000Z")]);
+
+    expect(parseImportPayload(data).videos[videoId].loops[0].createdAt).toBe("2026-05-19T12:00:00.000Z");
+  });
 });
 
 function withLoops(loops: Loop[]): PhraseLoopData {
@@ -111,6 +117,13 @@ function withLoops(loops: Loop[]): PhraseLoopData {
   return data;
 }
 
-function loop(id: string, start: number, end: number, label: string, updatedAt = "2026-05-19T12:00:00.000Z"): Loop {
-  return { id, start, end, label, updatedAt };
+function loop(
+  id: string,
+  start: number,
+  end: number,
+  label: string,
+  createdAt = "2026-05-19T12:00:00.000Z",
+  updatedAt = createdAt
+): Loop {
+  return { id, start, end, label, createdAt, updatedAt };
 }

@@ -240,7 +240,7 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
 
   const meta = document.createElement("div");
   meta.className = "loop-meta";
-  meta.textContent = `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.updatedAt)}`;
+  meta.textContent = `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.createdAt)}`;
 
   primaryRow.append(openButton, deleteButton);
   secondaryRow.append(statusButton);
