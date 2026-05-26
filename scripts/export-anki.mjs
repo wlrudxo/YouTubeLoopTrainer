@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -22,18 +22,19 @@ await mkdir(mediaDir, { recursive: true });
 
 const rows = [["Phrase", "Source", "Audio", "Video", "Start", "End", "YouTube", "Status", "LoopId"]];
 
+if (!args.skipMedia) {
+  if (args.cacheSource) {
+    for (const loop of loops) {
+      const sourcePath = await ensureSourceMedia(loop, cacheDir, args.media);
+      await cutLoopMedia(sourcePath, mediaPathForLoop(loop, mediaDir, args.media), loop, args.media);
+    }
+  } else {
+    await downloadLoopSectionsByVideo(loops, mediaDir, args.media);
+  }
+}
+
 for (const loop of loops) {
   const mediaFile = args.media === "video" ? `${safeFilename(loop.id)}.mp4` : `${safeFilename(loop.id)}.mp3`;
-  const mediaPath = join(mediaDir, mediaFile);
-
-  if (!args.skipMedia) {
-    if (args.cacheSource) {
-      const sourcePath = await ensureSourceMedia(loop, cacheDir, args.media);
-      await cutLoopMedia(sourcePath, mediaPath, loop, args.media);
-    } else {
-      await downloadLoopSection(loop, mediaPath, args.media);
-    }
-  }
 
   rows.push([
     loop.label,
@@ -146,10 +147,72 @@ async function ensureSourceMedia(loop, targetDir, media) {
   return findDownloadedFile(target, targetDir, loop.videoId);
 }
 
-async function downloadLoopSection(loop, outputPath, media) {
+async function downloadLoopSectionsByVideo(loopsToDownload, outputDir, media) {
+  const groups = groupLoopsByVideo(loopsToDownload);
+  for (const group of groups) {
+    await downloadLoopSectionGroup(group, outputDir, media);
+  }
+}
+
+async function downloadLoopSectionGroup(group, outputDir, media) {
+  const tempDir = join(outputDir, `.tmp-${safeFilename(group.videoId)}-${Date.now().toString(36)}`);
+  await mkdir(tempDir, { recursive: true });
+
+  const extension = media === "video" ? "mp4" : "mp3";
+  const outputTemplate = join(tempDir, "section-%(section_start)s-%(section_end)s.%(ext)s");
+  const args =
+    media === "video"
+      ? [
+          "--no-playlist",
+          "-f",
+          "bv*+ba/best",
+          "--force-keyframes-at-cuts",
+          "--merge-output-format",
+          "mp4",
+          "-o",
+          outputTemplate,
+          group.url
+        ]
+      : [
+          "--no-playlist",
+          "-f",
+          "bestaudio*/bestaudio/best",
+          "--force-keyframes-at-cuts",
+          "-x",
+          "--audio-format",
+          "mp3",
+          "--audio-quality",
+          "0",
+          "-o",
+          outputTemplate,
+          group.url
+        ];
+
+  for (const loop of group.loops) {
+    args.splice(args.indexOf("--force-keyframes-at-cuts"), 0, "--download-sections", `*${formatTimestamp(loop.start)}-${formatTimestamp(loop.end)}`);
+  }
+
+  await run("yt-dlp", args);
+
+  try {
+    await moveSectionOutputs(group.loops, tempDir, outputDir, extension);
+  } catch (error) {
+    console.warn(`Batch section mapping failed for ${group.videoId}. Falling back to individual downloads.`, error);
+    for (const loop of group.loops) {
+      await downloadLoopSectionSingle(loop, outputDir, media);
+    }
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function downloadLoopSectionSingle(loop, outputDir, media) {
+  const tempDir = join(outputDir, `.tmp-${safeFilename(loop.id)}-${Date.now().toString(36)}`);
+  await mkdir(tempDir, { recursive: true });
+
+  const extension = media === "video" ? "mp4" : "mp3";
+  const outputTemplate = join(tempDir, "section-%(section_start)s-%(section_end)s.%(ext)s");
   const url = loop.url || `https://www.youtube.com/watch?v=${loop.videoId}`;
-  const section = `*${formatTimestamp(loop.start)}-${formatTimestamp(loop.end)}`;
-  const outputTemplate = outputPath.replace(/\.(mp3|mp4)$/i, ".%(ext)s");
   const args =
     media === "video"
       ? [
@@ -157,7 +220,7 @@ async function downloadLoopSection(loop, outputPath, media) {
           "-f",
           "bv*+ba/best",
           "--download-sections",
-          section,
+          `*${formatTimestamp(loop.start)}-${formatTimestamp(loop.end)}`,
           "--force-keyframes-at-cuts",
           "--merge-output-format",
           "mp4",
@@ -170,7 +233,7 @@ async function downloadLoopSection(loop, outputPath, media) {
           "-f",
           "bestaudio*/bestaudio/best",
           "--download-sections",
-          section,
+          `*${formatTimestamp(loop.start)}-${formatTimestamp(loop.end)}`,
           "--force-keyframes-at-cuts",
           "-x",
           "--audio-format",
@@ -183,8 +246,10 @@ async function downloadLoopSection(loop, outputPath, media) {
         ];
   await run("yt-dlp", args);
 
-  if (!existsSync(outputPath)) {
-    throw new Error(`yt-dlp did not create ${outputPath}.`);
+  try {
+    await moveSectionOutputs([loop], tempDir, outputDir, extension);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
   }
 }
 
@@ -251,6 +316,72 @@ function run(command, args) {
 
 function safeFilename(value) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+}
+
+function mediaPathForLoop(loop, outputDir, media) {
+  return join(outputDir, `${safeFilename(loop.id)}.${media === "video" ? "mp4" : "mp3"}`);
+}
+
+function groupLoopsByVideo(items) {
+  const groups = new Map();
+  for (const loop of items) {
+    const key = loop.videoId;
+    const current =
+      groups.get(key) ??
+      {
+        videoId: loop.videoId,
+        url: loop.url || `https://www.youtube.com/watch?v=${loop.videoId}`,
+        loops: []
+      };
+    current.loops.push(loop);
+    groups.set(key, current);
+  }
+
+  return [...groups.values()];
+}
+
+async function moveSectionOutputs(loopsToMap, tempDir, outputDir, extension) {
+  const files = (await readdir(tempDir)).filter((file) => file.toLowerCase().endsWith(`.${extension}`));
+  const remaining = new Set(files);
+
+  for (const loop of loopsToMap) {
+    const source = findSectionFileForLoop([...remaining], loop, extension);
+    if (!source) {
+      throw new Error(`No section file found for ${loop.id} (${loop.start}-${loop.end}).`);
+    }
+
+    remaining.delete(source);
+    const from = join(tempDir, source);
+    const to = join(outputDir, `${safeFilename(loop.id)}.${extension}`);
+    if (existsSync(to)) {
+      await rm(to, { force: true });
+    }
+    try {
+      await rename(from, to);
+    } catch {
+      await copyFile(from, to);
+      await rm(from, { force: true });
+    }
+  }
+}
+
+function findSectionFileForLoop(files, loop, extension) {
+  const expectedStart = formatSectionNumber(loop.start);
+  const expectedEnd = formatSectionNumber(loop.end);
+  return (
+    files.find((file) => file === `section-${expectedStart}-${expectedEnd}.${extension}`) ??
+    files.find((file) => file.includes(`-${expectedStart}-${expectedEnd}.`) && file.endsWith(`.${extension}`)) ??
+    files.find((file) => {
+      const match = /^section-(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)\./.exec(file);
+      if (!match) return false;
+
+      return Math.abs(Number(match[1]) - loop.start) < 0.05 && Math.abs(Number(match[2]) - loop.end) < 0.05;
+    })
+  );
+}
+
+function formatSectionNumber(value) {
+  return Number.isInteger(value) ? `${value}.0` : String(value);
 }
 
 function formatTimestamp(seconds) {
