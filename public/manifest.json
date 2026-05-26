@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PhraseLoop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Save and replay multiple A-B loops on YouTube for listening and shadowing practice.",
   "icons": {
     "16": "icons/icon-16.png",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyData, mergePhraseLoopData, parseImportPayload } from "../shared/importExport";
+import { createAnkiExportPayload, createEmptyData, mergePhraseLoopData, parseImportPayload } from "../shared/importExport";
 import type { Loop, PhraseLoopData } from "../shared/types";
 
 const videoId = "cSicoPFDeqQ";
@@ -103,6 +103,31 @@ describe("import/export merge", () => {
     const data = withLoops([loop("a", 10, 15, "first", "2026-05-19T12:00:00.000Z", "2026-05-19T13:00:00.000Z")]);
 
     expect(parseImportPayload(data).videos[videoId].loops[0].createdAt).toBe("2026-05-19T12:00:00.000Z");
+  });
+
+  it("creates Anki export payloads", () => {
+    const data = withLoops([loop("a", 10, 15, "first")]);
+    data.videos[videoId].channelTitle = "Test Channel";
+
+    expect(createAnkiExportPayload(data, "2026-05-19T13:00:00.000Z")).toEqual({
+      app: "PhraseLoopAnkiExport",
+      schemaVersion: 1,
+      exportedAt: "2026-05-19T13:00:00.000Z",
+      loops: [
+        {
+          id: "a",
+          videoId,
+          videoTitle: "Test video",
+          channelTitle: "Test Channel",
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          start: 10,
+          end: 15,
+          label: "first",
+          createdAt: "2026-05-19T12:00:00.000Z",
+          updatedAt: "2026-05-19T12:00:00.000Z"
+        }
+      ]
+    });
   });
 });
 

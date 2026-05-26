@@ -1,9 +1,10 @@
-import { createExportPayload, mergePhraseLoopData, parseImportPayload, replacePhraseLoopData } from "../shared/importExport";
+import { createAnkiExportPayload, createExportPayload, mergePhraseLoopData, parseImportPayload, replacePhraseLoopData } from "../shared/importExport";
 import * as storage from "../shared/storage";
 import type { ImportMode } from "../shared/types";
 import "./settings.css";
 
 const exportButton = document.querySelector<HTMLButtonElement>("#exportButton");
+const ankiExportButton = document.querySelector<HTMLButtonElement>("#ankiExportButton");
 const importFile = document.querySelector<HTMLInputElement>("#importFile");
 const libraryButton = document.querySelector<HTMLButtonElement>("#libraryButton");
 const statusEl = document.querySelector<HTMLDivElement>("#status");
@@ -16,6 +17,10 @@ exportButton?.addEventListener("click", () => {
   void exportData();
 });
 
+ankiExportButton?.addEventListener("click", () => {
+  void exportAnkiData();
+});
+
 importFile?.addEventListener("change", () => {
   void importData();
 });
@@ -24,16 +29,21 @@ async function exportData(): Promise<void> {
   try {
     const data = await storage.readData();
     const payload = createExportPayload(data);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `phraseloop-${payload.exportedAt.slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadJson(payload, `phraseloop-${payload.exportedAt.slice(0, 10)}.json`);
     setStatus("Export ready.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Export failed.");
+  }
+}
+
+async function exportAnkiData(): Promise<void> {
+  try {
+    const data = await storage.readData();
+    const payload = createAnkiExportPayload(data);
+    downloadJson(payload, `phraseloop-anki-${payload.exportedAt.slice(0, 10)}.json`);
+    setStatus(`Anki export ready. Loops: ${payload.loops.length}.`);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "Anki export failed.");
   }
 }
 
@@ -75,4 +85,14 @@ function setStatus(message: string): void {
   if (statusEl) {
     statusEl.textContent = message;
   }
+}
+
+function downloadJson(payload: unknown, filename: string): void {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

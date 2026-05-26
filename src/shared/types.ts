@@ -62,6 +62,27 @@ export type ExportPayload = {
   data: PhraseLoopData;
 };
 
+export type AnkiLoopExportItem = {
+  id: string;
+  videoId: string;
+  videoTitle: string;
+  channelTitle?: string;
+  url: string;
+  start: number;
+  end: number;
+  label: string;
+  status?: LoopStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AnkiExportPayload = {
+  app: "PhraseLoopAnkiExport";
+  schemaVersion: SchemaVersion;
+  exportedAt: string;
+  loops: AnkiLoopExportItem[];
+};
+
 export type ImportMode = "merge" | "replace";
 
 export type ImportSummary = {

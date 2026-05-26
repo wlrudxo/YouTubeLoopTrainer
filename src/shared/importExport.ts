@@ -1,7 +1,7 @@
 import { DUPLICATE_TIME_EPSILON_SECONDS, SCHEMA_VERSION } from "./constants";
 import { createEmptyData, ensureVideo } from "./data";
 import { normalizeLabel } from "./labels";
-import type { ExportPayload, ImportSummary, Loop, LoopStatus, PhraseLoopData, VideoLoops } from "./types";
+import type { AnkiExportPayload, ExportPayload, ImportSummary, Loop, LoopStatus, PhraseLoopData, VideoLoops } from "./types";
 
 export function createExportPayload(data: PhraseLoopData, exportedAt = new Date().toISOString()): ExportPayload {
   return {
@@ -13,6 +13,29 @@ export function createExportPayload(data: PhraseLoopData, exportedAt = new Date(
       storage: "local"
     },
     data
+  };
+}
+
+export function createAnkiExportPayload(data: PhraseLoopData, exportedAt = new Date().toISOString()): AnkiExportPayload {
+  return {
+    app: "PhraseLoopAnkiExport",
+    schemaVersion: SCHEMA_VERSION,
+    exportedAt,
+    loops: Object.values(data.videos).flatMap((video) =>
+      video.loops.map((loop) => ({
+        id: loop.id,
+        videoId: video.videoId,
+        videoTitle: video.title,
+        ...(video.channelTitle ? { channelTitle: video.channelTitle } : {}),
+        url: video.url,
+        start: loop.start,
+        end: loop.end,
+        label: loop.label,
+        ...(loop.status ? { status: loop.status } : {}),
+        createdAt: loop.createdAt,
+        updatedAt: loop.updatedAt
+      }))
+    )
   };
 }
 
