@@ -1,7 +1,7 @@
 import { DUPLICATE_TIME_EPSILON_SECONDS, SCHEMA_VERSION } from "./constants";
 import { createEmptyData, ensureVideo } from "./data";
 import { normalizeLabel } from "./labels";
-import type { AnkiExportPayload, ExportPayload, ImportSummary, Loop, LoopStatus, PhraseLoopData, VideoLoops } from "./types";
+import type { ExportPayload, ImportSummary, Loop, LoopStatus, PhraseLoopData, VideoLoops } from "./types";
 
 export function createExportPayload(data: PhraseLoopData, exportedAt = new Date().toISOString()): ExportPayload {
   return {
@@ -13,29 +13,6 @@ export function createExportPayload(data: PhraseLoopData, exportedAt = new Date(
       storage: "local"
     },
     data
-  };
-}
-
-export function createAnkiExportPayload(data: PhraseLoopData, exportedAt = new Date().toISOString()): AnkiExportPayload {
-  return {
-    app: "PhraseLoopAnkiExport",
-    schemaVersion: SCHEMA_VERSION,
-    exportedAt,
-    loops: Object.values(data.videos).flatMap((video) =>
-      video.loops.map((loop) => ({
-        id: loop.id,
-        videoId: video.videoId,
-        videoTitle: video.title,
-        ...(video.channelTitle ? { channelTitle: video.channelTitle } : {}),
-        url: video.url,
-        start: loop.start,
-        end: loop.end,
-        label: loop.label,
-        ...(loop.status ? { status: loop.status } : {}),
-        createdAt: loop.createdAt,
-        updatedAt: loop.updatedAt
-      }))
-    )
   };
 }
 
@@ -62,7 +39,13 @@ export function mergePhraseLoopData(existing: PhraseLoopData, imported: PhraseLo
 
   for (const importedVideo of Object.values(imported.videos)) {
     summary.videosProcessed += 1;
-    const localVideo = ensureVideo(data, importedVideo.videoId, importedVideo.title, importedVideo.url);
+    const localVideo = ensureVideo(data, importedVideo.videoId, importedVideo.title, importedVideo.url, {
+      channelTitle: importedVideo.channelTitle,
+      channelAvatarUrl: importedVideo.channelAvatarUrl
+    });
+    if (isImportedProgressNewer(importedVideo.progress, localVideo.progress)) {
+      localVideo.progress = cloneProgress(importedVideo.progress);
+    }
 
     for (const importedLoop of importedVideo.loops) {
       const sameIdIndex = localVideo.loops.findIndex((loop) => loop.id === importedLoop.id);
@@ -112,6 +95,19 @@ function isImportedNewer(importedLoop: Loop, existingLoop: Loop): boolean {
 
   const importedTime = Date.parse(importedLoop.updatedAt);
   const existingTime = Date.parse(existingLoop.updatedAt);
+
+  if (Number.isNaN(importedTime)) return false;
+  if (Number.isNaN(existingTime)) return true;
+
+  return importedTime > existingTime;
+}
+
+function isImportedProgressNewer(importedProgress: VideoLoops["progress"], existingProgress: VideoLoops["progress"]): boolean {
+  if (!importedProgress) return false;
+  if (!existingProgress) return true;
+
+  const importedTime = Date.parse(importedProgress.updatedAt);
+  const existingTime = Date.parse(existingProgress.updatedAt);
 
   if (Number.isNaN(importedTime)) return false;
   if (Number.isNaN(existingTime)) return true;

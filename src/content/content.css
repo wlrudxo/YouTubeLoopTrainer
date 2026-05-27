@@ -35,6 +35,19 @@
   gap: 6px;
 }
 
+.phraseloop-list-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phraseloop-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .phraseloop-progress-time {
   color: #64748b;
   font-size: 12px;
@@ -43,6 +56,27 @@
 }
 
 .phraseloop-title {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.phraseloop-rate-buttons {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.phraseloop-rate-button {
+  min-height: 24px !important;
+  padding: 0 6px;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.phraseloop-rate-button.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
   font-weight: 700;
 }
 
@@ -123,8 +157,8 @@
 }
 
 .phraseloop-trim-meta,
-.phraseloop-trim-context,
-.phraseloop-trim-actions {
+.phraseloop-trim-footer,
+.phraseloop-trim-context {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -191,12 +225,19 @@
   font-variant-numeric: tabular-nums;
 }
 
-.phraseloop-trim-actions {
-  justify-content: flex-start;
+.phraseloop-trim-footer {
+  min-height: 28px;
 }
 
-.phraseloop-trim-actions button {
+.phraseloop-trim-context {
   flex: 1;
+}
+
+.phraseloop-trim-loop-button.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
 }
 
 .phraseloop-label-wrap {
@@ -222,16 +263,10 @@
   padding: 4px 8px;
   color: #111827;
   font: inherit;
-}
-
-.phraseloop-label-input {
-  min-height: 78px;
-  resize: vertical;
-}
-
-.phraseloop-rename-input {
-  min-height: 78px;
-  resize: vertical;
+  line-height: 1.35;
+  min-height: calc(1.35em + 10px);
+  overflow: hidden;
+  resize: none;
 }
 
 .phraseloop-message {

@@ -59,6 +59,16 @@ button {
   padding: 0 12px;
 }
 
+.danger-section {
+  border-color: #fecaca;
+}
+
+.danger-button {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #ffffff;
+}
+
 fieldset {
   display: flex;
   gap: 12px;

@@ -120,7 +120,7 @@ npx tsc --noEmit
 
 ## Anki Media Export
 
-PhraseLoop can export saved loops as Anki metadata, then a local Windows script can create media files and a CSV import file.
+PhraseLoop can export saved data as JSON, then a local Windows script can create Anki media files and a CSV import file.
 
 Requirements:
 
@@ -130,11 +130,11 @@ winget install Gyan.FFmpeg
 ```
 
 1. Open PhraseLoop Settings.
-2. Click `Export Anki JSON`.
+2. Click `Export JSON`.
 3. Run the local generator. By default it downloads only each loop section, which is best for long videos and many short clips:
 
 ```powershell
-node scripts/export-anki.mjs "$env:USERPROFILE\Downloads\phraseloop-anki-YYYY-MM-DD.json" "$env:USERPROFILE\Desktop\phraseloop-anki"
+node scripts/export-anki.mjs "$env:USERPROFILE\Downloads\phraseloop-YYYY-MM-DD.json" "$env:USERPROFILE\Desktop\phraseloop-anki"
 ```
 
 The output folder contains:
@@ -151,13 +151,13 @@ Import `phraseloop-anki.csv` into Anki and copy the files from `media/` into you
 Optional video clips:
 
 ```powershell
-node scripts/export-anki.mjs .\phraseloop-anki.json .\anki-export --media video
+node scripts/export-anki.mjs .\phraseloop.json .\anki-export --media video
 ```
 
 Optional source caching mode:
 
 ```powershell
-node scripts/export-anki.mjs .\phraseloop-anki.json .\anki-export --cache-source
+node scripts/export-anki.mjs .\phraseloop.json .\anki-export --cache-source
 ```
 
 This downloads each source video/audio once and cuts clips locally. It is usually less efficient for very long videos spread across many sources.

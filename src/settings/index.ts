@@ -1,12 +1,13 @@
-import { createAnkiExportPayload, createExportPayload, mergePhraseLoopData, parseImportPayload, replacePhraseLoopData } from "../shared/importExport";
+import { createExportPayload, parseImportPayload } from "../shared/importExport";
+import { createEmptyData } from "../shared/data";
 import * as storage from "../shared/storage";
 import type { ImportMode } from "../shared/types";
 import "./settings.css";
 
 const exportButton = document.querySelector<HTMLButtonElement>("#exportButton");
-const ankiExportButton = document.querySelector<HTMLButtonElement>("#ankiExportButton");
 const importFile = document.querySelector<HTMLInputElement>("#importFile");
 const libraryButton = document.querySelector<HTMLButtonElement>("#libraryButton");
+const clearDataButton = document.querySelector<HTMLButtonElement>("#clearDataButton");
 const statusEl = document.querySelector<HTMLDivElement>("#status");
 
 libraryButton?.addEventListener("click", () => {
@@ -17,12 +18,12 @@ exportButton?.addEventListener("click", () => {
   void exportData();
 });
 
-ankiExportButton?.addEventListener("click", () => {
-  void exportAnkiData();
-});
-
 importFile?.addEventListener("change", () => {
   void importData();
+});
+
+clearDataButton?.addEventListener("click", () => {
+  void clearData();
 });
 
 async function exportData(): Promise<void> {
@@ -36,17 +37,6 @@ async function exportData(): Promise<void> {
   }
 }
 
-async function exportAnkiData(): Promise<void> {
-  try {
-    const data = await storage.readData();
-    const payload = createAnkiExportPayload(data);
-    downloadJson(payload, `phraseloop-anki-${payload.exportedAt.slice(0, 10)}.json`);
-    setStatus(`Anki export ready. Loops: ${payload.loops.length}.`);
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Anki export failed.");
-  }
-}
-
 async function importData(): Promise<void> {
   const file = importFile?.files?.[0];
   if (!file) return;
@@ -56,14 +46,12 @@ async function importData(): Promise<void> {
     const mode = getImportMode();
 
     if (mode === "replace") {
-      await storage.writeData(replacePhraseLoopData(imported));
+      await storage.replaceData(imported);
       setStatus("Import complete. Data replaced.");
       return;
     }
 
-    const existing = await storage.readData();
-    const { data, summary } = mergePhraseLoopData(existing, imported);
-    await storage.writeData(data);
+    const { summary } = await storage.mergeData(imported);
     setStatus(
       `Import complete. Videos: ${summary.videosProcessed}, added: ${summary.loopsAdded}, updated: ${summary.loopsUpdated}, skipped: ${summary.duplicatesSkipped}.`
     );
@@ -73,6 +61,18 @@ async function importData(): Promise<void> {
     if (importFile) {
       importFile.value = "";
     }
+  }
+}
+
+async function clearData(): Promise<void> {
+  const confirmed = window.confirm("Delete all saved PhraseLoop data from this browser?");
+  if (!confirmed) return;
+
+  try {
+    await storage.replaceData(createEmptyData());
+    setStatus("All PhraseLoop data deleted.");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "Delete failed.");
   }
 }
 

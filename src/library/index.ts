@@ -195,11 +195,12 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
 
   const label = document.createElement("textarea");
   label.className = "loop-label-input";
-  label.rows = 3;
+  label.rows = 1;
   label.value = loop.label;
   label.addEventListener("blur", () => {
     void renameLoop(video, loop, label.value);
   });
+  label.addEventListener("input", () => autoSizeTextarea(label));
   label.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -246,6 +247,7 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
   secondaryRow.append(statusButton);
   tools.append(primaryRow, secondaryRow, meta);
   row.append(label, tools);
+  autoSizeTextarea(label);
   return row;
 }
 
@@ -424,4 +426,9 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", 
   if (className) node.className = className;
   if (text) node.textContent = text;
   return node;
+}
+
+function autoSizeTextarea(textarea: HTMLTextAreaElement): void {
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight}px`;
 }

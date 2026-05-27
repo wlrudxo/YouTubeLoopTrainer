@@ -11,6 +11,8 @@ export type PanelState = {
   message: string;
   highlightedLoopId: string | null;
   collapsed: boolean;
+  playbackRate: number;
+  playbackRates: number[];
   draftLoopActive: boolean;
   debugRecords: DebugRecord[];
   debugExpanded: boolean;
@@ -21,12 +23,12 @@ export type PanelActions = {
   setA: () => void;
   setB: () => void;
   copyCaption: () => void;
+  copyLoopLabel: (loop: Loop) => void;
   save: () => void;
   saveProgress: () => void;
   goProgress: () => void;
   updateDraftRange: (start: number, end: number) => void;
   updateDraftLabel: (label: string) => void;
-  previewDraft: () => void;
   toggleDraftLoop: () => void;
   startLoop: (loop: Loop) => void;
   stopLoop: () => void;
@@ -34,6 +36,7 @@ export type PanelActions = {
   setLoopStatus: (loop: Loop, status: LoopStatus) => void;
   deleteLoop: (loop: Loop) => void;
   setCollapsed: (collapsed: boolean) => void;
+  setPlaybackRate: (rate: number) => void;
   setDebugExpanded: (expanded: boolean) => void;
 };
 
@@ -78,6 +81,10 @@ export class PhraseLoopPanel {
     this.root.remove();
   }
 
+  isMounted(): boolean {
+    return this.root.isConnected;
+  }
+
   update(state: PanelState): void {
     this.state = state;
     this.render();
@@ -88,7 +95,20 @@ export class PhraseLoopPanel {
   }
 
   private render(): void {
-    const { draft, video, activeLoopId, message, highlightedLoopId, collapsed, draftLoopActive, debugRecords, debugExpanded, debugEnabled } = this.state;
+    const {
+      draft,
+      video,
+      activeLoopId,
+      message,
+      highlightedLoopId,
+      collapsed,
+      playbackRate,
+      playbackRates,
+      draftLoopActive,
+      debugRecords,
+      debugExpanded,
+      debugEnabled
+    } = this.state;
     const validation = validateDraftMarkers(draft.markerA, draft.markerB);
     const loops = video?.loops ?? [];
 
@@ -96,14 +116,15 @@ export class PhraseLoopPanel {
     this.root.className = `phraseloop-panel${collapsed ? " is-collapsed" : ""}`;
 
     const header = element("div", "phraseloop-header");
-    header.append(element("div", "phraseloop-title", `PhraseLoop ${APP_BUILD}`));
+    const titleWrap = element("div", "phraseloop-title-wrap");
+    titleWrap.append(element("div", "phraseloop-title", APP_BUILD), this.renderPlaybackRates(playbackRates, playbackRate));
+    header.append(titleWrap);
 
     const headerActions = element("div", "phraseloop-header-actions");
     const copyCaptionButton = button("CC", "Copy visible caption");
     copyCaptionButton.className = "phraseloop-icon-button";
     copyCaptionButton.setAttribute("aria-label", "Copy visible caption");
     copyCaptionButton.addEventListener("click", this.actions.copyCaption);
-    headerActions.append(copyCaptionButton);
 
     if (video?.progress) {
       const progressTime = element("span", "phraseloop-progress-time", formatTime(video.progress.time));
@@ -123,6 +144,7 @@ export class PhraseLoopPanel {
     goProgressButton.setAttribute("aria-label", "Go to saved progress");
     goProgressButton.addEventListener("click", this.actions.goProgress);
     headerActions.append(goProgressButton);
+    headerActions.append(copyCaptionButton);
 
     const collapseButton = button(collapsed ? "+" : "-", collapsed ? "Expand" : "Collapse");
     collapseButton.className = "phraseloop-icon-button";
@@ -147,10 +169,13 @@ export class PhraseLoopPanel {
     const labelInput = document.createElement("textarea");
     labelInput.className = LABEL_INPUT_CLASS;
     labelInput.value = draft.label;
-    labelInput.rows = 3;
+    labelInput.rows = 1;
     labelInput.placeholder = validation.ok ? "Loop label" : "Set A and B markers";
     labelInput.disabled = !validation.ok;
-    labelInput.addEventListener("input", () => this.actions.updateDraftLabel(labelInput.value));
+    labelInput.addEventListener("input", () => {
+      this.actions.updateDraftLabel(labelInput.value);
+      autoSizeTextarea(labelInput);
+    });
     labelRow.append(labelInput);
 
     const saveButton = button("✓", "Save Loop");
@@ -162,6 +187,7 @@ export class PhraseLoopPanel {
 
     labelWrap.append(labelRow);
     this.root.append(labelWrap);
+    autoSizeTextarea(labelInput);
 
     const messageText = message || (!validation.ok && (draft.markerA !== null || draft.markerB !== null) ? validation.message : "");
     if (messageText) {
@@ -170,11 +196,19 @@ export class PhraseLoopPanel {
 
     const listHeader = element("div", "phraseloop-list-header");
     listHeader.append(element("span", "", "Saved Loops"));
-    if (activeLoopId) {
+    const activeLoop = loops.find((loop) => loop.id === activeLoopId);
+    if (activeLoop) {
+      const activeActions = element("div", "phraseloop-list-header-actions");
+      const copyLoopButton = button("CC", `Copy ${activeLoop.label}`);
+      copyLoopButton.className = "phraseloop-icon-button";
+      copyLoopButton.setAttribute("aria-label", "Copy active loop text");
+      copyLoopButton.addEventListener("click", () => this.actions.copyLoopLabel(activeLoop));
+
       const stopButton = button("Stop", "Stop Loop");
       stopButton.className = "phraseloop-stop-button";
       stopButton.addEventListener("click", this.actions.stopLoop);
-      listHeader.append(stopButton);
+      activeActions.append(copyLoopButton, stopButton);
+      listHeader.append(activeActions);
     }
     this.root.append(listHeader);
 
@@ -198,6 +232,20 @@ export class PhraseLoopPanel {
         this.root.append(this.renderDebugRecords(debugRecords));
       }
     }
+  }
+
+  private renderPlaybackRates(rates: number[], activeRate: number): HTMLElement {
+    const wrap = element("div", "phraseloop-rate-buttons");
+
+    for (const rate of rates) {
+      const rateButton = button(formatPlaybackRate(rate), `Set playback speed to ${formatPlaybackRate(rate)}x`);
+      rateButton.className = `phraseloop-rate-button${rate === activeRate ? " is-active" : ""}`;
+      rateButton.setAttribute("aria-label", `Set playback speed to ${formatPlaybackRate(rate)}x`);
+      rateButton.addEventListener("click", () => this.actions.setPlaybackRate(rate));
+      wrap.append(rateButton);
+    }
+
+    return wrap;
   }
 
   private markerButton(label: string, value: number | null, action: () => void): HTMLElement {
@@ -247,20 +295,17 @@ export class PhraseLoopPanel {
       this.beginTrimDrag(kind, event, start, end, contextStart, contextEnd, track, selected, startHandle, endHandle);
     });
 
+    const footer = element("div", "phraseloop-trim-footer");
     const context = element("div", "phraseloop-trim-context");
     context.append(element("span", "", formatSignedSeconds(contextStart - start)), element("span", "", formatSignedSeconds(contextEnd - end)));
 
-    const actions = element("div", "phraseloop-trim-actions");
-    const previewButton = button("Preview", "Preview adjusted loop once");
-    previewButton.className = "phraseloop-text-button";
-    previewButton.addEventListener("click", this.actions.previewDraft);
-
-    const loopButton = button(draftLoopActive ? "Stop" : "Loop", draftLoopActive ? "Stop draft loop" : "Repeat adjusted loop");
-    loopButton.className = `phraseloop-text-button${draftLoopActive ? " is-active" : ""}`;
+    const loopButton = button(draftLoopActive ? "■" : "↻", draftLoopActive ? "Stop draft loop" : "Repeat adjusted loop");
+    loopButton.className = `phraseloop-icon-button phraseloop-trim-loop-button${draftLoopActive ? " is-active" : ""}`;
+    loopButton.setAttribute("aria-label", draftLoopActive ? "Stop draft loop" : "Repeat adjusted loop");
     loopButton.addEventListener("click", this.actions.toggleDraftLoop);
-    actions.append(previewButton, loopButton);
+    footer.append(context, loopButton);
 
-    wrap.append(meta, track, context, actions);
+    wrap.append(meta, track, footer);
     return wrap;
   }
 
@@ -416,7 +461,7 @@ export class PhraseLoopPanel {
     const input = document.createElement("textarea");
     input.className = "phraseloop-rename-input";
     input.value = loop.label;
-    input.rows = 3;
+    input.rows = 1;
 
     let done = false;
     const save = () => {
@@ -440,8 +485,10 @@ export class PhraseLoopPanel {
         cancel();
       }
     });
+    input.addEventListener("input", () => autoSizeTextarea(input));
     input.addEventListener("blur", save);
     row.append(input);
+    autoSizeTextarea(input);
     input.focus();
     input.select();
   }
@@ -508,6 +555,10 @@ function formatLoopStatus(status: LoopStatus): string {
   return "New";
 }
 
+function formatPlaybackRate(rate: number): string {
+  return Number.isInteger(rate) ? String(rate) : String(rate);
+}
+
 function button(text: string, title: string): HTMLButtonElement {
   const node = document.createElement("button");
   node.type = "button";
@@ -557,6 +608,11 @@ function roundToTenth(value: number): number {
 function formatSignedSeconds(value: number): string {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(1)}s`;
+}
+
+function autoSizeTextarea(textarea: HTMLTextAreaElement): void {
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight}px`;
 }
 
 async function copyDebugRecords(records: DebugRecord[]): Promise<void> {

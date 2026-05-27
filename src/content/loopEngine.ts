@@ -7,14 +7,24 @@ export class LoopEngine {
   private previewLoop: Loop | null = null;
   private video: HTMLVideoElement | null = null;
   private intervalId: number | null = null;
+  private suppressSeekUntil = 0;
   private onActiveLoopChange: (loop: Loop | null) => void;
+  private readonly handleVideoSeek = () => {
+    if (!this.activeLoop || performance.now() < this.suppressSeekUntil) return;
+
+    this.stop();
+  };
 
   constructor(onActiveLoopChange: (loop: Loop | null) => void) {
     this.onActiveLoopChange = onActiveLoopChange;
   }
 
   setVideo(video: HTMLVideoElement | null): void {
+    if (this.video === video) return;
+
+    this.video?.removeEventListener("seeking", this.handleVideoSeek);
     this.video = video;
+    this.video?.addEventListener("seeking", this.handleVideoSeek);
   }
 
   getActiveLoop(): Loop | null {
@@ -32,7 +42,7 @@ export class LoopEngine {
 
     this.previewLoop = null;
     this.activeLoop = loop;
-    this.video.currentTime = loop.start;
+    this.seekTo(loop.start);
     void this.video.play();
     this.ensureInterval();
     this.onActiveLoopChange(loop);
@@ -49,7 +59,7 @@ export class LoopEngine {
 
     this.activeLoop = null;
     this.previewLoop = loop;
-    this.video.currentTime = loop.start;
+    this.seekTo(loop.start);
     void this.video.play();
     this.ensureInterval();
     this.onActiveLoopChange(null);
@@ -61,6 +71,8 @@ export class LoopEngine {
       window.clearInterval(this.intervalId);
       this.intervalId = null;
     }
+    this.video?.removeEventListener("seeking", this.handleVideoSeek);
+    this.video = null;
   }
 
   private ensureInterval(): void {
@@ -79,9 +91,16 @@ export class LoopEngine {
           return;
         }
 
-        this.video.currentTime = loop.start;
+        this.seekTo(loop.start);
         void this.video.play();
       }
     }, LOOP_TICK_MS);
+  }
+
+  private seekTo(time: number): void {
+    if (!this.video) return;
+
+    this.suppressSeekUntil = performance.now() + 250;
+    this.video.currentTime = time;
   }
 }

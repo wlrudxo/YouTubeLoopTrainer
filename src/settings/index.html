@@ -44,12 +44,6 @@
       </section>
 
       <section class="section">
-        <h2>Anki Export</h2>
-        <p>Export loop metadata for the local Anki media generator.</p>
-        <button id="ankiExportButton" type="button">Export Anki JSON</button>
-      </section>
-
-      <section class="section">
         <h2>Import</h2>
         <fieldset>
           <legend>Import Mode</legend>
@@ -63,6 +57,12 @@
           </label>
         </fieldset>
         <input id="importFile" type="file" accept="application/json,.json" />
+      </section>
+
+      <section class="section danger-section">
+        <h2>Reset Data</h2>
+        <p>Delete all saved PhraseLoop videos, loops, and progress from this browser.</p>
+        <button id="clearDataButton" class="danger-button" type="button">Delete All Data</button>
       </section>
 
       <div id="status" class="status" role="status"></div>

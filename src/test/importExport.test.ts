@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAnkiExportPayload, createEmptyData, mergePhraseLoopData, parseImportPayload } from "../shared/importExport";
+import { createEmptyData, mergePhraseLoopData, parseImportPayload } from "../shared/importExport";
 import type { Loop, PhraseLoopData } from "../shared/types";
 
 const videoId = "cSicoPFDeqQ";
@@ -55,6 +55,42 @@ describe("import/export merge", () => {
     expect(result.data.videos[videoId].loops).toHaveLength(2);
   });
 
+  it("merges imported video metadata even when no loops are added", () => {
+    const existing = withLoops([loop("a", 10, 15, "first")]);
+    const imported = withLoops([loop("a", 10, 15, "first")]);
+    imported.videos[videoId].title = "Imported title";
+    imported.videos[videoId].channelTitle = "Imported Channel";
+    imported.videos[videoId].channelAvatarUrl = "https://example.com/imported.jpg";
+
+    const result = mergePhraseLoopData(existing, imported);
+
+    expect(result.data.videos[videoId]).toMatchObject({
+      title: "Imported title",
+      channelTitle: "Imported Channel",
+      channelAvatarUrl: "https://example.com/imported.jpg"
+    });
+  });
+
+  it("keeps the newest progress when merging imports", () => {
+    const existing = withLoops([]);
+    existing.videos[videoId].progress = {
+      time: 12,
+      updatedAt: "2026-05-19T10:00:00.000Z"
+    };
+    const imported = withLoops([]);
+    imported.videos[videoId].progress = {
+      time: 42.5,
+      updatedAt: "2026-05-19T12:30:00.000Z"
+    };
+
+    const result = mergePhraseLoopData(existing, imported);
+
+    expect(result.data.videos[videoId].progress).toEqual({
+      time: 42.5,
+      updatedAt: "2026-05-19T12:30:00.000Z"
+    });
+  });
+
   it("parses wrapped export payloads", () => {
     const data = withLoops([loop("a", 10, 15, "first")]);
 
@@ -105,30 +141,6 @@ describe("import/export merge", () => {
     expect(parseImportPayload(data).videos[videoId].loops[0].createdAt).toBe("2026-05-19T12:00:00.000Z");
   });
 
-  it("creates Anki export payloads", () => {
-    const data = withLoops([loop("a", 10, 15, "first")]);
-    data.videos[videoId].channelTitle = "Test Channel";
-
-    expect(createAnkiExportPayload(data, "2026-05-19T13:00:00.000Z")).toEqual({
-      app: "PhraseLoopAnkiExport",
-      schemaVersion: 1,
-      exportedAt: "2026-05-19T13:00:00.000Z",
-      loops: [
-        {
-          id: "a",
-          videoId,
-          videoTitle: "Test video",
-          channelTitle: "Test Channel",
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          start: 10,
-          end: 15,
-          label: "first",
-          createdAt: "2026-05-19T12:00:00.000Z",
-          updatedAt: "2026-05-19T12:00:00.000Z"
-        }
-      ]
-    });
-  });
 });
 
 function withLoops(loops: Loop[]): PhraseLoopData {

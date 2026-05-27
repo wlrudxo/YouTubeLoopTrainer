@@ -8,3 +8,12 @@ await build({
   target: "es2020",
   sourcemap: true
 });
+
+await build({
+  entryPoints: ["src/background/index.ts"],
+  bundle: true,
+  outfile: "dist/background/index.js",
+  format: "esm",
+  target: "es2020",
+  sourcemap: true
+});

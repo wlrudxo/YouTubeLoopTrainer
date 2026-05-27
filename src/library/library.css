@@ -93,8 +93,11 @@ input {
 }
 
 textarea {
-  resize: vertical;
   padding: 7px 8px;
+  line-height: 1.45;
+  min-height: calc(1.45em + 16px);
+  overflow: hidden;
+  resize: none;
 }
 
 .library-grid {

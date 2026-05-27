@@ -34,9 +34,11 @@ type AppState = {
   highlightedLoopId: string | null;
   collapsed: boolean;
   debugExpanded: boolean;
+  playbackRate: number;
 };
 
 const DRAFT_LOOP_ID = "__phraseloop_draft__";
+const PLAYBACK_RATES = [0.5, 0.75, 0.85, 1] as const;
 
 const state: AppState = {
   videoId: null,
@@ -45,7 +47,8 @@ const state: AppState = {
   message: "",
   highlightedLoopId: null,
   collapsed: true,
-  debugExpanded: false
+  debugExpanded: false,
+  playbackRate: 1
 };
 
 const debug = new DebugLogger(new URL(window.location.href).searchParams.get("pl_debug") === "1");
@@ -54,12 +57,15 @@ let panel: PhraseLoopPanel | null = null;
 let loopEngine: LoopEngine | null = null;
 let unregisterShortcuts: (() => void) | null = null;
 let clearNavigationListener: (() => void) | null = null;
+let panelObserver: MutationObserver | null = null;
+let mountRetryTimer: number | null = null;
 let highlightTimer: number | null = null;
 let messageTimer: number | null = null;
 let labelRefreshToken = 0;
 let captionCollector: VisibleCaptionCollector | null = null;
 let collectedCaptionLabel = "";
 let handledLoopRequestKey = "";
+let videoLoadToken = 0;
 
 void boot();
 
@@ -77,9 +83,11 @@ async function boot(): Promise<void> {
   clearNavigationListener = onYouTubeNavigation(() => {
     void loadCurrentVideo();
   });
+  startPanelObserver();
 }
 
 async function loadCurrentVideo(): Promise<void> {
+  const loadToken = ++videoLoadToken;
   const videoId = getVideoIdFromUrl();
   if (!videoId) {
     resetCurrentVideoState();
@@ -95,16 +103,20 @@ async function loadCurrentVideo(): Promise<void> {
   state.highlightedLoopId = null;
   loopEngine?.stop();
   loopEngine?.setVideo(findVideoElement());
+  applyPlaybackRate(state.playbackRate);
 
   let existing: VideoLoops | null = null;
   try {
     existing = await storage.getVideo(videoId);
   } catch (error) {
+    if (!isCurrentVideoLoad(loadToken, videoId)) return;
     state.video = ensureVideo(createEmptyData(), videoId, getVideoTitle(), getWatchUrl(videoId), getCurrentVideoMetadata());
     setMessage(formatStorageError(error));
     mountOrRenderPanel();
     return;
   }
+
+  if (!isCurrentVideoLoad(loadToken, videoId)) return;
 
   if (existing) {
     const metadata = getCurrentVideoMetadata();
@@ -148,7 +160,7 @@ function resetCurrentVideoState(): void {
 function mountOrRenderPanel(): void {
   const target = findPanelTarget();
   if (!target) {
-    window.setTimeout(mountOrRenderPanel, 500);
+    schedulePanelMount(500);
     return;
   }
 
@@ -157,12 +169,12 @@ function mountOrRenderPanel(): void {
       setA,
       setB,
       copyCaption: () => void copyCaption(),
+      copyLoopLabel: (loop) => void copyLoopLabel(loop),
       save: () => void saveDraftLoop(),
       saveProgress,
       goProgress,
       updateDraftRange,
       updateDraftLabel,
-      previewDraft: previewDraftLoop,
       toggleDraftLoop,
       startLoop,
       stopLoop,
@@ -170,12 +182,43 @@ function mountOrRenderPanel(): void {
       setLoopStatus: (loop, status) => void setLoopStatus(loop, status),
       deleteLoop: (loop) => void deleteLoop(loop),
       setCollapsed,
+      setPlaybackRate,
       setDebugExpanded
     });
   }
 
   panel.mount(target);
   render();
+}
+
+function startPanelObserver(): void {
+  panelObserver?.disconnect();
+  panelObserver = new MutationObserver(() => {
+    schedulePanelMount(120);
+  });
+  panelObserver.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+function schedulePanelMount(delayMs: number): void {
+  if (mountRetryTimer !== null) {
+    window.clearTimeout(mountRetryTimer);
+  }
+
+  mountRetryTimer = window.setTimeout(() => {
+    mountRetryTimer = null;
+    if (!state.videoId || !state.video) return;
+
+    const target = findPanelTarget();
+    if (!target) {
+      schedulePanelMount(Math.min(delayMs * 2, 2000));
+      return;
+    }
+
+    if (panel?.isMounted()) return;
+
+    debug.log("app", "mounting panel after YouTube DOM update");
+    mountOrRenderPanel();
+  }, delayMs);
 }
 
 function registerGlobalShortcuts(): void {
@@ -251,9 +294,19 @@ async function copyCaption(): Promise<void> {
 
   try {
     await navigator.clipboard.writeText(caption);
-    setMessage("Caption copied.", 1400);
+    setMessage("Copied.", 1400);
   } catch {
     setMessage("Could not copy caption.");
+  }
+  render();
+}
+
+async function copyLoopLabel(loop: Loop): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(loop.label);
+    setMessage("Copied.", 1400);
+  } catch {
+    setMessage("Could not copy loop text.");
   }
   render();
 }
@@ -309,6 +362,9 @@ async function saveDraftLoop(): Promise<void> {
     return;
   }
   debug.log("storage", "saved loop", loop);
+  if (loopEngine?.getActiveLoop()?.id === DRAFT_LOOP_ID) {
+    loopEngine.stop();
+  }
   state.draft = createEmptyDraft();
   collectedCaptionLabel = "";
   captionCollector?.reset();
@@ -329,21 +385,6 @@ function startLoop(loop: Loop): void {
   loopEngine?.setVideo(video);
   loopEngine?.start(loop);
   setMessage("");
-}
-
-function previewDraftLoop(): void {
-  const video = findVideoElement();
-  const loop = createDraftPlaybackLoop();
-  if (!video || !loop) {
-    setMessage("Set a valid loop first.");
-    render();
-    return;
-  }
-
-  loopEngine?.setVideo(video);
-  loopEngine?.playOnce(loop);
-  setMessage("");
-  render();
 }
 
 function toggleDraftLoop(): void {
@@ -430,7 +471,14 @@ async function saveProgress(): Promise<void> {
   }
 
   try {
-    state.video = await storage.saveProgress(state.videoId, video.currentTime, new Date().toISOString());
+    state.video = await storage.saveProgress(
+      state.videoId,
+      video.currentTime,
+      new Date().toISOString(),
+      getVideoTitle(),
+      getWatchUrl(state.videoId),
+      getCurrentVideoMetadata()
+    );
   } catch (error) {
     setMessage(formatStorageError(error));
     render();
@@ -512,6 +560,15 @@ function setCollapsed(collapsed: boolean): void {
       debug.log("captions", ok ? "enabled captions on panel expand" : "caption button not found on panel expand");
     }, 0);
   }
+  render();
+}
+
+function setPlaybackRate(rate: number): void {
+  if (!PLAYBACK_RATES.includes(rate as (typeof PLAYBACK_RATES)[number])) return;
+
+  state.playbackRate = rate;
+  applyPlaybackRate(rate);
+  debug.log("video", "set playback rate", { rate });
   render();
 }
 
@@ -620,6 +677,8 @@ function toPanelState(): PanelState {
     message: state.message,
     highlightedLoopId: state.highlightedLoopId,
     collapsed: state.collapsed,
+    playbackRate: state.playbackRate,
+    playbackRates: [...PLAYBACK_RATES],
     draftLoopActive: loopEngine?.getActiveLoop()?.id === DRAFT_LOOP_ID,
     debugRecords: debug.getRecords(),
     debugExpanded: state.debugExpanded,
@@ -658,6 +717,17 @@ function roundToTenth(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+function applyPlaybackRate(rate: number): void {
+  const video = findVideoElement();
+  if (video) {
+    video.playbackRate = rate;
+  }
+}
+
+function isCurrentVideoLoad(loadToken: number, videoId: string): boolean {
+  return loadToken === videoLoadToken && getVideoIdFromUrl() === videoId;
+}
+
 function getCurrentVideoMetadata(): { channelTitle?: string; channelAvatarUrl?: string } {
   return {
     channelTitle: getChannelTitle() || undefined,
@@ -672,6 +742,10 @@ function formatStorageError(error: unknown): string {
 window.addEventListener("pagehide", () => {
   unregisterShortcuts?.();
   clearNavigationListener?.();
+  panelObserver?.disconnect();
+  if (mountRetryTimer !== null) {
+    window.clearTimeout(mountRetryTimer);
+  }
   loopEngine?.destroy();
   captionCollector?.reset();
 });

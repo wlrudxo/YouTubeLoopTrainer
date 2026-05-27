@@ -20,7 +20,7 @@ const loops = parseLoops(payload);
 await mkdir(cacheDir, { recursive: true });
 await mkdir(mediaDir, { recursive: true });
 
-const rows = [["Phrase", "Source", "Audio", "Video", "Start", "End", "YouTube", "Status", "LoopId"]];
+const rows = [["Phrase", "Source", "Channel", "Audio", "Video", "Start", "End", "YouTube", "Status", "LoopId"]];
 
 if (!args.skipMedia) {
   if (args.cacheSource) {
@@ -39,8 +39,9 @@ for (const loop of loops) {
   rows.push([
     loop.label,
     loop.videoTitle,
-    args.media === "audio" || args.skipMedia ? `[sound:${mediaFile}]` : "",
-    args.media === "video" && !args.skipMedia ? `[sound:${mediaFile}]` : "",
+    loop.channelTitle ?? "",
+    args.media === "audio" ? `[sound:${mediaFile}]` : "",
+    args.media === "video" ? `[sound:${mediaFile}]` : "",
     loop.start.toFixed(1),
     loop.end.toFixed(1),
     loop.url,
@@ -50,7 +51,7 @@ for (const loop of loops) {
 }
 
 const csvPath = join(outputDir, "phraseloop-anki.csv");
-await writeFile(csvPath, rows.map(toCsvRow).join("\r\n"), "utf8");
+await writeFile(csvPath, `\uFEFF${rows.map(toCsvRow).join("\r\n")}`, "utf8");
 
 console.log(`Loops: ${loops.length}`);
 console.log(`CSV: ${csvPath}`);
@@ -99,10 +100,10 @@ function parseArgs(rawArgs) {
 
 function printHelp() {
   console.log(`Usage:
-  node scripts/export-anki.mjs <phraseloop-anki.json> <output-dir> [--media audio|video] [--cache-source] [--skip-media]
+  node scripts/export-anki.mjs <phraseloop.json|phraseloop-anki.json> <output-dir> [--media audio|video] [--cache-source] [--skip-media]
 
 Examples:
-  node scripts/export-anki.mjs "$env:USERPROFILE\\Downloads\\phraseloop-anki-2026-05-26.json" "$env:USERPROFILE\\Desktop\\phraseloop-anki"
+  node scripts/export-anki.mjs "$env:USERPROFILE\\Downloads\\phraseloop-2026-05-26.json" "$env:USERPROFILE\\Desktop\\phraseloop-anki"
   node scripts/export-anki.mjs .\\phraseloop-anki.json .\\anki-export --media video
   node scripts/export-anki.mjs .\\phraseloop-anki.json .\\anki-export --cache-source
   node scripts/export-anki.mjs .\\phraseloop-anki.json .\\anki-export --skip-media
@@ -110,25 +111,51 @@ Examples:
 }
 
 function parseLoops(payload) {
-  if (payload?.app !== "PhraseLoopAnkiExport" || !Array.isArray(payload.loops)) {
-    throw new Error("Input must be a PhraseLoop Anki export JSON file.");
+  if (payload?.app === "PhraseLoopAnkiExport" && Array.isArray(payload.loops)) {
+    return payload.loops.map(validateLoop);
   }
 
-  return payload.loops.map((loop) => {
-    if (
-      typeof loop.id !== "string" ||
-      typeof loop.videoId !== "string" ||
-      typeof loop.videoTitle !== "string" ||
-      typeof loop.url !== "string" ||
-      typeof loop.start !== "number" ||
-      typeof loop.end !== "number" ||
-      typeof loop.label !== "string"
-    ) {
-      throw new Error("Invalid loop item in Anki export JSON.");
-    }
+  if (payload?.app === "PhraseLoop" && payload.data?.videos && typeof payload.data.videos === "object") {
+    return Object.values(payload.data.videos).flatMap((video) => {
+      if (!video || typeof video !== "object" || !Array.isArray(video.loops)) {
+        throw new Error("Invalid video item in PhraseLoop export JSON.");
+      }
 
-    return loop;
-  });
+      return video.loops.map((loop) =>
+        validateLoop({
+          id: loop.id,
+          videoId: video.videoId,
+          videoTitle: video.title,
+          channelTitle: video.channelTitle,
+          url: video.url,
+          start: loop.start,
+          end: loop.end,
+          label: loop.label,
+          status: loop.status,
+          createdAt: loop.createdAt,
+          updatedAt: loop.updatedAt
+        })
+      );
+    });
+  }
+
+  throw new Error("Input must be a PhraseLoop export JSON or PhraseLoop Anki export JSON file.");
+}
+
+function validateLoop(loop) {
+  if (
+    typeof loop.id !== "string" ||
+    typeof loop.videoId !== "string" ||
+    typeof loop.videoTitle !== "string" ||
+    typeof loop.url !== "string" ||
+    typeof loop.start !== "number" ||
+    typeof loop.end !== "number" ||
+    typeof loop.label !== "string"
+  ) {
+    throw new Error("Invalid loop item in PhraseLoop export JSON.");
+  }
+
+  return loop;
 }
 
 async function ensureSourceMedia(loop, targetDir, media) {
