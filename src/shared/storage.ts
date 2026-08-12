@@ -1,10 +1,9 @@
-import { STORAGE_KEY } from "./constants";
+import { SCHEMA_VERSION, STORAGE_KEY } from "./constants";
 import { createEmptyData, type VideoMetadata } from "./data";
-import { parseImportPayload } from "./importExport";
-import type { Loop, LoopStatus, PhraseLoopData, VideoLoops } from "./types";
+import type { Loop, PhraseLoopData, VideoLoops } from "./types";
 
 export class PhraseLoopStorageError extends Error {
-  constructor(message = "Stored PhraseLoop data is invalid. Export a backup or import valid data from settings before saving new changes.") {
+  constructor(message = "Stored PhraseLoop data is invalid.") {
     super(message);
     this.name = "PhraseLoopStorageError";
   }
@@ -18,30 +17,16 @@ export async function readData(): Promise<PhraseLoopData> {
     return createEmptyData();
   }
 
-  try {
-    return parseImportPayload(raw);
-  } catch (error) {
-    console.warn("[PhraseLoop] Failed to parse stored data", error);
+  const parsed = parseStoredData(raw);
+  if (!parsed) {
+    console.warn("[PhraseLoop] Failed to parse stored data");
     throw new PhraseLoopStorageError();
   }
+  return parsed;
 }
 
 export async function writeData(data: PhraseLoopData): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: data });
-}
-
-export async function getVideo(videoId: string): Promise<VideoLoops | null> {
-  const data = await readData();
-  return data.videos[videoId] ?? null;
-}
-
-export async function upsertVideo(video: VideoLoops): Promise<void> {
-  const data = await readData();
-  data.videos[video.videoId] = {
-    ...video,
-    loops: [...video.loops].sort((a, b) => a.start - b.start)
-  };
-  await writeData(data);
 }
 
 export async function addLoop(videoId: string, title: string, url: string, loop: Loop, metadata: VideoMetadata = {}): Promise<VideoLoops> {
@@ -57,57 +42,73 @@ export async function addLoop(videoId: string, title: string, url: string, loop:
   return video;
 }
 
-export async function renameLoop(videoId: string, loopId: string, label: string, updatedAt: string): Promise<VideoLoops | null> {
+/**
+ * Removes a pending loop. Deletes the whole video entry when it has no loops left,
+ * so storage only ever holds loops that have not been sent to the companion yet.
+ */
+export async function deleteLoop(videoId: string, loopId: string): Promise<void> {
   const data = await readData();
   const video = data.videos[videoId];
-  if (!video) return null;
-
-  video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, label, updatedAt, lastImportedHash: undefined } : loop));
-  await writeData(data);
-  return video;
-}
-
-export async function markLoopImported(videoId: string, loopId: string, captureHash: string): Promise<VideoLoops | null> {
-  const data = await readData();
-  const video = data.videos[videoId];
-  if (!video) return null;
-  video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, lastImportedHash: captureHash } : loop));
-  await writeData(data);
-  return video;
-}
-
-export async function setLoopStatus(videoId: string, loopId: string, status: LoopStatus, updatedAt: string): Promise<VideoLoops | null> {
-  const data = await readData();
-  const video = data.videos[videoId];
-  if (!video) return null;
-
-  video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, status, updatedAt } : loop));
-  await writeData(data);
-  return video;
-}
-
-export async function deleteVideo(videoId: string): Promise<void> {
-  const data = await readData();
-  delete data.videos[videoId];
-  await writeData(data);
-}
-
-export async function saveProgress(videoId: string, time: number, updatedAt: string): Promise<VideoLoops | null> {
-  const data = await readData();
-  const video = data.videos[videoId];
-  if (!video) return null;
-
-  video.progress = { time, updatedAt };
-  await writeData(data);
-  return video;
-}
-
-export async function deleteLoop(videoId: string, loopId: string): Promise<VideoLoops | null> {
-  const data = await readData();
-  const video = data.videos[videoId];
-  if (!video) return null;
+  if (!video) return;
 
   video.loops = video.loops.filter((loop) => loop.id !== loopId);
+  if (video.loops.length === 0) {
+    delete data.videos[videoId];
+  }
   await writeData(data);
-  return video;
+}
+
+function parseStoredData(input: unknown): PhraseLoopData | null {
+  if (!isRecord(input) || input.schemaVersion !== SCHEMA_VERSION || !isRecord(input.videos)) return null;
+
+  const videos: Record<string, VideoLoops> = {};
+  for (const value of Object.values(input.videos)) {
+    if (!isVideoLoops(value)) return null;
+    videos[value.videoId] = {
+      videoId: value.videoId,
+      title: value.title,
+      ...(typeof value.channelTitle === "string" ? { channelTitle: value.channelTitle } : {}),
+      ...(typeof value.channelAvatarUrl === "string" ? { channelAvatarUrl: value.channelAvatarUrl } : {}),
+      url: value.url,
+      loops: value.loops
+        .map((loop) => ({
+          id: loop.id,
+          start: loop.start,
+          end: loop.end,
+          label: loop.label,
+          createdAt: loop.createdAt,
+          updatedAt: loop.updatedAt
+        }))
+        .sort((a, b) => a.start - b.start)
+    };
+  }
+
+  return { schemaVersion: SCHEMA_VERSION, videos };
+}
+
+function isVideoLoops(value: unknown): value is VideoLoops {
+  if (!isRecord(value)) return false;
+  if (typeof value.videoId !== "string") return false;
+  if (typeof value.title !== "string") return false;
+  if (typeof value.url !== "string") return false;
+  if (!Array.isArray(value.loops)) return false;
+
+  return value.loops.every(isLoop);
+}
+
+function isLoop(value: unknown): value is Loop {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.start === "number" &&
+    typeof value.end === "number" &&
+    typeof value.label === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

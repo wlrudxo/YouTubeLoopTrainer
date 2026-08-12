@@ -1,151 +1,160 @@
+import { importLoopToCompanion, readCompanionConfig } from "../shared/companion";
 import * as storage from "../shared/storage";
-import type { VideoLoops } from "../shared/types";
+import { formatTime } from "../shared/time";
+import type { Loop, VideoLoops } from "../shared/types";
 import "./popup.css";
 
-const searchInput = document.querySelector<HTMLInputElement>("#searchInput");
-const videoList = document.querySelector<HTMLDivElement>("#videoList");
+type PendingRow = {
+  video: VideoLoops;
+  loop: Loop;
+};
+
+const loopList = document.querySelector<HTMLDivElement>("#loopList");
 const summaryEl = document.querySelector<HTMLDivElement>("#summary");
-const libraryButton = document.querySelector<HTMLButtonElement>("#libraryButton");
+const statusEl = document.querySelector<HTMLDivElement>("#status");
+const sendAllButton = document.querySelector<HTMLButtonElement>("#sendAllButton");
+const openDictationButton = document.querySelector<HTMLButtonElement>("#openDictationButton");
 const settingsButton = document.querySelector<HTMLButtonElement>("#settingsButton");
 
-let videos: VideoLoops[] = [];
+let rows: PendingRow[] = [];
+let sending = false;
 
 settingsButton?.addEventListener("click", () => {
   void chrome.runtime.openOptionsPage();
 });
 
-libraryButton?.addEventListener("click", () => {
-  void chrome.tabs.create({ url: chrome.runtime.getURL("library/index.html") });
+openDictationButton?.addEventListener("click", () => {
+  void openDictation();
 });
 
-searchInput?.addEventListener("input", () => {
-  renderVideos();
+sendAllButton?.addEventListener("click", () => {
+  void sendAll();
 });
 
-void loadLibrary();
+void loadPending();
 
-async function loadLibrary(): Promise<void> {
+async function loadPending(): Promise<void> {
   try {
     const data = await storage.readData();
-    videos = Object.values(data.videos).sort(compareVideos);
-    renderVideos();
+    rows = Object.values(data.videos)
+      .flatMap((video) => video.loops.map((loop) => ({ video, loop })))
+      .sort((a, b) => Date.parse(b.loop.createdAt) - Date.parse(a.loop.createdAt) || a.loop.start - b.loop.start);
+    renderRows();
   } catch (error) {
-    if (summaryEl) {
-      summaryEl.textContent = error instanceof Error ? error.message : "Failed to load PhraseLoop data.";
-    }
-    if (videoList) {
-      videoList.innerHTML = "";
-      videoList.append(createEmptyState("Open Settings to import a valid backup."));
-    }
+    rows = [];
+    renderRows();
+    setStatus(error instanceof Error ? error.message : "Failed to load PhraseLoop data.");
   }
 }
 
-function renderVideos(): void {
-  if (!videoList || !summaryEl) return;
+function renderRows(): void {
+  if (!loopList || !summaryEl) return;
 
-  const query = normalize(searchInput?.value ?? "");
-  const filtered = query ? videos.filter((video) => matchesVideo(video, query)) : videos;
-  const totalLoops = videos.reduce((sum, video) => sum + video.loops.length, 0);
+  summaryEl.textContent = rows.length === 0 ? "No pending loops" : `${rows.length} pending loop${rows.length === 1 ? "" : "s"}`;
+  if (sendAllButton) sendAllButton.disabled = sending || rows.length === 0;
 
-  summaryEl.textContent = `${videos.length} videos · ${totalLoops} loops`;
-  videoList.innerHTML = "";
-
-  if (filtered.length === 0) {
-    videoList.append(createEmptyState(videos.length === 0 ? "No saved videos yet." : "No matching videos."));
+  loopList.innerHTML = "";
+  if (rows.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "All captured loops were sent to the companion.";
+    loopList.append(empty);
     return;
   }
 
-  for (const video of filtered) {
-    videoList.append(createVideoRow(video));
+  for (const row of rows) {
+    loopList.append(createLoopRow(row));
   }
 }
 
-function createVideoRow(video: VideoLoops): HTMLElement {
-  const row = document.createElement("article");
-  row.className = "video-row";
+function createLoopRow(row: PendingRow): HTMLElement {
+  const item = document.createElement("article");
+  item.className = "loop-row";
 
-  row.append(createAvatar(video));
-
-  const body = document.createElement("button");
-  body.type = "button";
-  body.className = "video-main";
-  body.title = `Open ${getVideoTitle(video)}`;
-  body.addEventListener("click", () => openVideo(video));
+  const main = document.createElement("div");
+  main.className = "loop-main";
 
   const title = document.createElement("span");
-  title.className = "video-title";
-  title.textContent = getVideoTitle(video);
+  title.className = "loop-video-title";
+  title.textContent = row.video.title || row.video.videoId;
 
-  const meta = document.createElement("span");
-  meta.className = "video-meta";
-  meta.textContent = `${video.loops.length} loops${formatUpdatedAt(video)}`;
+  const label = document.createElement("span");
+  label.className = "loop-label";
+  label.textContent = row.loop.label;
 
-  const channel = document.createElement("span");
-  channel.className = "video-channel";
-  channel.textContent = video.channelTitle || "Unknown channel";
+  const range = document.createElement("span");
+  range.className = "loop-range";
+  range.textContent = `${formatTime(row.loop.start)} - ${formatTime(row.loop.end)}`;
 
-  body.append(title, channel, meta);
+  main.append(title, label, range);
+  item.append(main);
 
-  row.append(body);
-  return row;
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "icon-button";
+  deleteButton.title = `Delete ${row.loop.label}`;
+  deleteButton.setAttribute("aria-label", `Delete ${row.loop.label}`);
+  deleteButton.textContent = "x";
+  deleteButton.addEventListener("click", () => void deletePending(row));
+  item.append(deleteButton);
+
+  return item;
 }
 
-function createAvatar(video: VideoLoops): HTMLElement {
-  const wrap = document.createElement("div");
-  wrap.className = "video-avatar";
+async function deletePending(row: PendingRow): Promise<void> {
+  try {
+    await storage.deleteLoop(row.video.videoId, row.loop.id);
+    setStatus("");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "Delete failed.");
+  }
+  await loadPending();
+}
 
-  if (video.channelAvatarUrl) {
-    const image = document.createElement("img");
-    image.src = video.channelAvatarUrl;
-    image.alt = "";
-    image.referrerPolicy = "no-referrer";
-    wrap.append(image);
-  } else {
-    wrap.textContent = getVideoTitle(video).slice(0, 1).toUpperCase();
+async function sendAll(): Promise<void> {
+  if (sending || rows.length === 0) return;
+
+  sending = true;
+  renderRows();
+  setStatus("Sending pending loops...");
+
+  let sent = 0;
+  let failed = 0;
+  let lastError = "";
+
+  try {
+    const config = await readCompanionConfig();
+    for (const row of [...rows]) {
+      try {
+        await importLoopToCompanion(config, row.video, row.loop);
+        await storage.deleteLoop(row.video.videoId, row.loop.id);
+        sent += 1;
+      } catch (error) {
+        failed += 1;
+        lastError = error instanceof Error ? error.message : "Send failed.";
+      }
+    }
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : "Send failed.";
+    failed = rows.length;
   }
 
-  return wrap;
+  sending = false;
+  await loadPending();
+  setStatus(failed === 0 ? `Sent ${sent} loop${sent === 1 ? "" : "s"}.` : `Sent ${sent}, failed ${failed}. ${lastError}`);
 }
 
-function createEmptyState(message: string): HTMLElement {
-  const empty = document.createElement("div");
-  empty.className = "empty";
-  empty.textContent = message;
-  return empty;
+async function openDictation(): Promise<void> {
+  try {
+    const config = await readCompanionConfig();
+    await chrome.tabs.create({ url: config.url });
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "Could not open the dictation app.");
+  }
 }
 
-function openVideo(video: VideoLoops): void {
-  void chrome.tabs.create({ url: video.url || `https://www.youtube.com/watch?v=${video.videoId}` });
-}
-
-function matchesVideo(video: VideoLoops, query: string): boolean {
-  return (
-    normalize(video.title).includes(query) ||
-    normalize(video.channelTitle ?? "").includes(query) ||
-    normalize(video.videoId).includes(query) ||
-    video.loops.some((loop) => normalize(loop.label).includes(query))
-  );
-}
-
-function compareVideos(a: VideoLoops, b: VideoLoops): number {
-  return getLatestUpdatedAt(b) - getLatestUpdatedAt(a) || getVideoTitle(a).localeCompare(getVideoTitle(b));
-}
-
-function getLatestUpdatedAt(video: VideoLoops): number {
-  return Math.max(0, ...video.loops.map((loop) => Date.parse(loop.updatedAt) || 0));
-}
-
-function formatUpdatedAt(video: VideoLoops): string {
-  const latest = getLatestUpdatedAt(video);
-  if (!latest) return "";
-
-  return ` · updated ${new Date(latest).toLocaleDateString()}`;
-}
-
-function getVideoTitle(video: VideoLoops): string {
-  return video.title || video.videoId;
-}
-
-function normalize(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
+function setStatus(message: string): void {
+  if (statusEl) {
+    statusEl.textContent = message;
+  }
 }

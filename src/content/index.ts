@@ -1,11 +1,10 @@
-import { createEmptyData, ensureVideo } from "../shared/data";
 import { createLoopId } from "../shared/ids";
 import { resolveLoopLabel } from "../shared/labels";
 import * as storage from "../shared/storage";
 import { APP_BUILD } from "../shared/constants";
 import { getVisibleCaptionText } from "../shared/captions";
 import { formatRangeLabel } from "../shared/time";
-import type { DraftLoop, Loop, LoopStatus, VideoLoops } from "../shared/types";
+import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
 import { getCurrentVisibleCaptionLabel } from "./captionLabels";
 import { DebugLogger } from "./debug";
@@ -20,7 +19,6 @@ import {
   getChannelTitle,
   findPanelTarget,
   findVideoElement,
-  getLoopIdFromUrl,
   getVideoIdFromUrl,
   getVideoTitle,
   getWatchUrl,
@@ -29,10 +27,8 @@ import {
 
 type AppState = {
   videoId: string | null;
-  video: VideoLoops | null;
   draft: DraftLoop;
   message: string;
-  highlightedLoopId: string | null;
   collapsed: boolean;
   debugExpanded: boolean;
 };
@@ -41,10 +37,8 @@ const DRAFT_LOOP_ID = "__phraseloop_draft__";
 
 const state: AppState = {
   videoId: null,
-  video: null,
   draft: createEmptyDraft(),
   message: "",
-  highlightedLoopId: null,
   collapsed: true,
   debugExpanded: false
 };
@@ -55,12 +49,10 @@ let panel: PhraseLoopPanel | null = null;
 let loopEngine: LoopEngine | null = null;
 let unregisterShortcuts: (() => void) | null = null;
 let clearNavigationListener: (() => void) | null = null;
-let highlightTimer: number | null = null;
 let messageTimer: number | null = null;
 let labelRefreshToken = 0;
 let captionCollector: VisibleCaptionCollector | null = null;
 let collectedCaptionLabel = "";
-let handledLoopRequestKey = "";
 
 void boot();
 
@@ -68,19 +60,19 @@ async function boot(): Promise<void> {
   debug.subscribe(render);
   debug.log("app", "boot", { build: APP_BUILD });
 
-  loopEngine = new LoopEngine((loop) => {
-    render({ activeLoopId: loop?.id ?? null });
+  loopEngine = new LoopEngine(() => {
+    render();
   });
   captionCollector = new VisibleCaptionCollector(debug);
 
-  await loadCurrentVideo();
+  loadCurrentVideo();
   registerGlobalShortcuts();
   clearNavigationListener = onYouTubeNavigation(() => {
-    void loadCurrentVideo();
+    loadCurrentVideo();
   });
 }
 
-async function loadCurrentVideo(): Promise<void> {
+function loadCurrentVideo(): void {
   const videoId = getVideoIdFromUrl();
   if (!videoId) {
     resetCurrentVideoState();
@@ -93,53 +85,18 @@ async function loadCurrentVideo(): Promise<void> {
   collectedCaptionLabel = "";
   captionCollector?.reset();
   state.message = "";
-  state.highlightedLoopId = null;
   loopEngine?.stop();
   loopEngine?.setVideo(findVideoElement());
 
-  let existing: VideoLoops | null = null;
-  try {
-    existing = await storage.getVideo(videoId);
-  } catch (error) {
-    state.video = ensureVideo(createEmptyData(), videoId, getVideoTitle(), getWatchUrl(videoId), getCurrentVideoMetadata());
-    setMessage(formatStorageError(error));
-    mountOrRenderPanel();
-    return;
-  }
-
-  if (existing) {
-    const metadata = getCurrentVideoMetadata();
-    state.video = {
-      ...existing,
-      title: getVideoTitle() || existing.title,
-      url: getWatchUrl(videoId) || existing.url,
-      channelTitle: metadata.channelTitle || existing.channelTitle,
-      channelAvatarUrl: metadata.channelAvatarUrl || existing.channelAvatarUrl
-    };
-    try {
-      await storage.upsertVideo(state.video);
-    } catch (error) {
-      setMessage(formatStorageError(error));
-    }
-    debug.log("storage", "loaded existing video loops", { videoId, loops: existing.loops.length });
-  } else {
-    state.video = ensureVideo(createEmptyData(), videoId, getVideoTitle(), getWatchUrl(videoId), getCurrentVideoMetadata());
-    debug.log("storage", "created in-memory video entry", { videoId });
-  }
-
   mountOrRenderPanel();
-  scheduleRequestedLoopStart(videoId);
 }
 
 function resetCurrentVideoState(): void {
   state.videoId = null;
-  state.video = null;
   state.draft = createEmptyDraft();
   state.message = "";
-  state.highlightedLoopId = null;
   state.debugExpanded = false;
   collectedCaptionLabel = "";
-  handledLoopRequestKey = "";
   captionCollector?.reset();
   loopEngine?.stop();
   loopEngine?.setVideo(null);
@@ -159,18 +116,10 @@ function mountOrRenderPanel(): void {
       setB,
       copyCaption: () => void copyCaption(),
       save: () => void saveDraftLoop(),
-      saveProgress,
-      goProgress,
       updateDraftRange,
       updateDraftLabel,
       previewDraft: previewDraftLoop,
       toggleDraftLoop,
-      startLoop,
-      stopLoop,
-      renameLoop: (loop, label) => void renameLoop(loop, label),
-      setLoopStatus: (loop, status) => void setLoopStatus(loop, status),
-      importLoop: (loop) => void importLoop(loop),
-      deleteLoop: (loop) => void deleteLoop(loop),
       setCollapsed,
       setDebugExpanded
     });
@@ -274,7 +223,8 @@ function updateDraftRange(start: number, end: number): void {
 }
 
 async function saveDraftLoop(): Promise<void> {
-  if (!state.videoId) return;
+  const videoId = state.videoId;
+  if (!videoId) return;
 
   const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
   if (!validation.ok) {
@@ -298,39 +248,36 @@ async function saveDraftLoop(): Promise<void> {
     start: validation.start,
     end: validation.end,
     label: resolveLoopLabel(state.draft.label, validation.start, validation.end),
-    status: "new",
     createdAt: now,
     updatedAt: now
   };
 
+  let video: VideoLoops;
   try {
-    state.video = await storage.addLoop(state.videoId, getVideoTitle(), getWatchUrl(state.videoId), loop, getCurrentVideoMetadata());
+    video = await storage.addLoop(videoId, getVideoTitle(), getWatchUrl(videoId), loop, getCurrentVideoMetadata());
   } catch (error) {
     setMessage(formatStorageError(error));
     render();
     return;
   }
-  debug.log("storage", "saved loop", loop);
+  debug.log("storage", "saved pending loop", loop);
   state.draft = createEmptyDraft();
   collectedCaptionLabel = "";
   captionCollector?.reset();
-  state.highlightedLoopId = loop.id;
-  setMessage("Loop saved.", 1800);
-  scheduleHighlightClear();
+  setMessage("Sending to local dictation...");
   render();
-}
 
-function startLoop(loop: Loop): void {
-  const video = findVideoElement();
-  if (!video) {
-    setMessage("Could not find the YouTube video.");
-    render();
-    return;
+  try {
+    await importLoopToCompanion(await readCompanionConfig(), video, loop);
+    await storage.deleteLoop(videoId, loop.id);
+    debug.log("companion", "loop sent and removed from pending queue", { id: loop.id });
+    setMessage("Sent. Local MP3 processing started.", 2400);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Could not reach the companion.";
+    debug.log("companion", "send failed, loop kept as pending", { id: loop.id, reason });
+    setMessage(`Kept as pending. ${reason}`, 4000);
   }
-
-  loopEngine?.setVideo(video);
-  loopEngine?.start(loop);
-  setMessage("");
+  render();
 }
 
 function previewDraftLoop(): void {
@@ -383,141 +330,8 @@ function syncActiveDraftLoop(): void {
   loopEngine.updateActiveLoop(loop);
 }
 
-function scheduleRequestedLoopStart(videoId: string, attempt = 0): void {
-  const loopId = getLoopIdFromUrl();
-  if (!loopId || !state.video) return;
-
-  const requestKey = `${videoId}:${loopId}`;
-  if (handledLoopRequestKey === requestKey) return;
-
-  const loop = state.video.loops.find((item) => item.id === loopId);
-  if (!loop) {
-    debug.log("loop", "requested loop not found", { videoId, loopId });
-    return;
-  }
-
-  const video = findVideoElement();
-  if (!video) {
-    if (attempt < 20) {
-      window.setTimeout(() => scheduleRequestedLoopStart(videoId, attempt + 1), 250);
-    } else {
-      debug.log("loop", "requested loop start failed: video not found", { videoId, loopId });
-    }
-    return;
-  }
-
-  loopEngine?.setVideo(video);
-  loopEngine?.start(loop);
-  handledLoopRequestKey = requestKey;
-  state.highlightedLoopId = loop.id;
-  state.collapsed = false;
-  setMessage("Loop started.", 1400);
-  scheduleHighlightClear();
-  debug.log("loop", "started requested loop from URL", { videoId, loopId, start: loop.start, end: loop.end });
-  render();
-}
-
 function stopLoop(): void {
   loopEngine?.stop();
-}
-
-async function saveProgress(): Promise<void> {
-  if (!state.videoId) return;
-
-  const video = findVideoElement();
-  if (!video) {
-    setMessage("Could not find the YouTube video.");
-    render();
-    return;
-  }
-
-  try {
-    state.video = await storage.saveProgress(state.videoId, video.currentTime, new Date().toISOString());
-  } catch (error) {
-    setMessage(formatStorageError(error));
-    render();
-    return;
-  }
-  setMessage("Progress saved.", 1600);
-  debug.log("progress", "saved progress", { videoId: state.videoId, time: video.currentTime });
-  render();
-}
-
-function goProgress(): void {
-  const progress = state.video?.progress;
-  if (!progress) {
-    setMessage("No saved progress.");
-    render();
-    return;
-  }
-
-  const video = findVideoElement();
-  if (!video) {
-    setMessage("Could not find the YouTube video.");
-    render();
-    return;
-  }
-
-  loopEngine?.stop();
-  video.currentTime = progress.time;
-  setMessage("Progress loaded.", 1400);
-  debug.log("progress", "loaded progress", { videoId: state.videoId, time: progress.time });
-  render();
-}
-
-async function renameLoop(loop: Loop, nextLabel: string): Promise<void> {
-  if (!state.videoId) return;
-
-  const label = nextLabel.trim() || loop.label;
-  try {
-    state.video = await storage.renameLoop(state.videoId, loop.id, label, new Date().toISOString());
-  } catch (error) {
-    setMessage(formatStorageError(error));
-  }
-  render();
-}
-
-async function setLoopStatus(loop: Loop, status: LoopStatus): Promise<void> {
-  if (!state.videoId) return;
-
-  try {
-    state.video = await storage.setLoopStatus(state.videoId, loop.id, status, new Date().toISOString());
-  } catch (error) {
-    setMessage(formatStorageError(error));
-  }
-  debug.log("loop", "updated loop status", { id: loop.id, status });
-  render();
-}
-
-async function importLoop(loop: Loop): Promise<void> {
-  if (!state.videoId || !state.video) return;
-  setMessage("Sending to local dictation...");
-  render();
-  try {
-    const captureHash = await importLoopToCompanion(await readCompanionConfig(), state.video, loop);
-    state.video = await storage.markLoopImported(state.videoId, loop.id, captureHash);
-    setMessage("Sent. Local MP3 processing started.", 2400);
-  } catch (error) {
-    setMessage(error instanceof Error ? error.message : "Could not send the loop to local dictation.");
-  }
-  render();
-}
-
-async function deleteLoop(loop: Loop): Promise<void> {
-  if (!state.videoId) return;
-
-  if (!window.confirm(`Delete "${loop.label}"?`)) return;
-
-  if (loopEngine?.getActiveLoop()?.id === loop.id) {
-    loopEngine.stop();
-  }
-
-  try {
-    state.video = await storage.deleteLoop(state.videoId, loop.id);
-  } catch (error) {
-    setMessage(formatStorageError(error));
-  }
-  render();
 }
 
 function setCollapsed(collapsed: boolean): void {
@@ -613,28 +427,14 @@ function setMessage(message: string, clearAfterMs?: number): void {
   }
 }
 
-function scheduleHighlightClear(): void {
-  if (highlightTimer !== null) {
-    window.clearTimeout(highlightTimer);
-  }
-
-  highlightTimer = window.setTimeout(() => {
-    state.highlightedLoopId = null;
-    render();
-  }, 1800);
-}
-
-function render(overrides: Partial<Pick<PanelState, "activeLoopId">> = {}): void {
-  panel?.update({ ...toPanelState(), ...overrides });
+function render(): void {
+  panel?.update(toPanelState());
 }
 
 function toPanelState(): PanelState {
   return {
     draft: state.draft,
-    video: state.video,
-    activeLoopId: loopEngine?.getActiveLoop()?.id ?? null,
     message: state.message,
-    highlightedLoopId: state.highlightedLoopId,
     collapsed: state.collapsed,
     draftLoopActive: loopEngine?.getActiveLoop()?.id === DRAFT_LOOP_ID,
     debugRecords: debug.getRecords(),
@@ -664,7 +464,6 @@ function createDraftPlaybackLoop(): Loop | null {
     start: validation.start,
     end: validation.end,
     label: "Draft loop",
-    status: "new",
     createdAt: now,
     updatedAt: now
   };

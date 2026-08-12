@@ -11,9 +11,8 @@
       <header class="settings-header">
         <div>
           <h1>PhraseLoop Settings</h1>
-          <p>Import and export your local PhraseLoop library.</p>
+          <p>Connect the extension to the local dictation companion.</p>
         </div>
-        <button id="libraryButton" type="button">Library</button>
       </header>
 
       <section class="section">
@@ -29,7 +28,7 @@
           </div>
           <div>
             <dt><kbd>\</kbd></dt>
-            <dd>Save Loop</dd>
+            <dd>Save &amp; send loop</dd>
           </div>
           <div>
             <dt><kbd>Esc</kbd></dt>
@@ -53,33 +52,6 @@
           <button id="saveCompanionButton" type="button">Save &amp; Connect</button>
           <button id="openCompanionButton" type="button">Open Dictation</button>
         </div>
-      </section>
-
-      <section class="section">
-        <h2>Export</h2>
-        <button id="exportButton" type="button">Export JSON</button>
-      </section>
-
-      <section class="section">
-        <h2>Anki Export</h2>
-        <p>Export loop metadata for the local Anki media generator.</p>
-        <button id="ankiExportButton" type="button">Export Anki JSON</button>
-      </section>
-
-      <section class="section">
-        <h2>Import</h2>
-        <fieldset>
-          <legend>Import Mode</legend>
-          <label>
-            <input type="radio" name="importMode" value="merge" checked />
-            Merge
-          </label>
-          <label>
-            <input type="radio" name="importMode" value="replace" />
-            Replace
-          </label>
-        </fieldset>
-        <input id="importFile" type="file" accept="application/json,.json" />
       </section>
 
       <div id="status" class="status" role="status"></div>

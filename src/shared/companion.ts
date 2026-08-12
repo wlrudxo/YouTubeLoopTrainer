@@ -24,8 +24,8 @@ export async function pairCompanion(config: CompanionConfig): Promise<void> {
   await request(config, "/pair", { method: "POST" });
 }
 
-export async function importLoopToCompanion(config: CompanionConfig, video: VideoLoops, loop: Loop): Promise<string> {
-  const result = await request(config, "/import", {
+export async function importLoopToCompanion(config: CompanionConfig, video: VideoLoops, loop: Loop): Promise<void> {
+  await request(config, "/import", {
     method: "POST",
     body: JSON.stringify({
       loopId: loop.id,
@@ -39,8 +39,6 @@ export async function importLoopToCompanion(config: CompanionConfig, video: Vide
       url: video.url
     })
   });
-  if (typeof result?.captureHash !== "string") throw new Error("Companion returned an invalid capture hash.");
-  return result.captureHash;
 }
 
 async function request(config: CompanionConfig, path: string, init: RequestInit): Promise<any> {

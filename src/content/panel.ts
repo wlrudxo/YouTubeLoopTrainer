@@ -1,15 +1,12 @@
 import { APP_BUILD } from "../shared/constants";
 import { formatTime } from "../shared/time";
-import type { DraftLoop, Loop, LoopStatus, VideoLoops } from "../shared/types";
+import type { DraftLoop } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
 import type { DebugRecord } from "./debug";
 
 export type PanelState = {
   draft: DraftLoop;
-  video: VideoLoops | null;
-  activeLoopId: string | null;
   message: string;
-  highlightedLoopId: string | null;
   collapsed: boolean;
   draftLoopActive: boolean;
   debugRecords: DebugRecord[];
@@ -22,18 +19,10 @@ export type PanelActions = {
   setB: () => void;
   copyCaption: () => void;
   save: () => void;
-  saveProgress: () => void;
-  goProgress: () => void;
   updateDraftRange: (start: number, end: number) => void;
   updateDraftLabel: (label: string) => void;
   previewDraft: () => void;
   toggleDraftLoop: () => void;
-  startLoop: (loop: Loop) => void;
-  stopLoop: () => void;
-  renameLoop: (loop: Loop, label: string) => void;
-  setLoopStatus: (loop: Loop, status: LoopStatus) => void;
-  importLoop: (loop: Loop) => void;
-  deleteLoop: (loop: Loop) => void;
   setCollapsed: (collapsed: boolean) => void;
   setDebugExpanded: (expanded: boolean) => void;
 };
@@ -89,9 +78,8 @@ export class PhraseLoopPanel {
   }
 
   private render(): void {
-    const { draft, video, activeLoopId, message, highlightedLoopId, collapsed, draftLoopActive, debugRecords, debugExpanded, debugEnabled } = this.state;
+    const { draft, message, collapsed, draftLoopActive, debugRecords, debugExpanded, debugEnabled } = this.state;
     const validation = validateDraftMarkers(draft.markerA, draft.markerB);
-    const loops = video?.loops ?? [];
 
     this.root.innerHTML = "";
     this.root.className = `phraseloop-panel${collapsed ? " is-collapsed" : ""}`;
@@ -105,25 +93,6 @@ export class PhraseLoopPanel {
     copyCaptionButton.setAttribute("aria-label", "Copy visible caption");
     copyCaptionButton.addEventListener("click", this.actions.copyCaption);
     headerActions.append(copyCaptionButton);
-
-    if (video?.progress) {
-      const progressTime = element("span", "phraseloop-progress-time", formatTime(video.progress.time));
-      progressTime.title = `Saved at ${formatMinute(video.progress.updatedAt)}`;
-      headerActions.append(progressTime);
-    }
-
-    const saveProgressButton = button("💾", "Save progress");
-    saveProgressButton.className = "phraseloop-icon-button";
-    saveProgressButton.setAttribute("aria-label", "Save progress");
-    saveProgressButton.addEventListener("click", this.actions.saveProgress);
-    headerActions.append(saveProgressButton);
-
-    const goProgressButton = button("↪", "Go to saved progress");
-    goProgressButton.className = "phraseloop-icon-button";
-    goProgressButton.disabled = !video?.progress;
-    goProgressButton.setAttribute("aria-label", "Go to saved progress");
-    goProgressButton.addEventListener("click", this.actions.goProgress);
-    headerActions.append(goProgressButton);
 
     const collapseButton = button(collapsed ? "+" : "-", collapsed ? "Expand" : "Collapse");
     collapseButton.className = "phraseloop-icon-button";
@@ -154,10 +123,10 @@ export class PhraseLoopPanel {
     labelInput.addEventListener("input", () => this.actions.updateDraftLabel(labelInput.value));
     labelRow.append(labelInput);
 
-    const saveButton = button("✓", "Save Loop");
+    const saveButton = button("✓", "Send to local dictation");
     saveButton.className = "phraseloop-icon-button";
     saveButton.disabled = !validation.ok;
-    saveButton.setAttribute("aria-label", "Save Loop");
+    saveButton.setAttribute("aria-label", "Send to local dictation");
     saveButton.addEventListener("click", this.actions.save);
     labelRow.append(saveButton);
 
@@ -168,26 +137,6 @@ export class PhraseLoopPanel {
     if (messageText) {
       this.root.append(element("div", "phraseloop-message", messageText));
     }
-
-    const listHeader = element("div", "phraseloop-list-header");
-    listHeader.append(element("span", "", "Saved Loops"));
-    if (activeLoopId) {
-      const stopButton = button("Stop", "Stop Loop");
-      stopButton.className = "phraseloop-stop-button";
-      stopButton.addEventListener("click", this.actions.stopLoop);
-      listHeader.append(stopButton);
-    }
-    this.root.append(listHeader);
-
-    const list = element("div", "phraseloop-list");
-    if (loops.length === 0) {
-      list.append(element("div", "phraseloop-empty", "No saved loops yet."));
-    } else {
-      for (const loop of loops) {
-        list.append(this.loopRow(loop, activeLoopId === loop.id, highlightedLoopId === loop.id));
-      }
-    }
-    this.root.append(list);
 
     if (debugEnabled) {
       const debugToggle = button(`Debug (${debugRecords.length})`, "Show caption diagnostics");
@@ -377,79 +326,6 @@ export class PhraseLoopPanel {
     drag.endHandle.style.left = `${endPercent}%`;
   }
 
-  private loopRow(loop: Loop, active: boolean, highlighted: boolean): HTMLElement {
-    const row = element("div", `phraseloop-loop-row${active ? " is-active" : ""}${highlighted ? " is-highlighted" : ""}`);
-    const main = button("", `Play ${loop.label}`);
-    main.className = "phraseloop-loop-main";
-    main.innerHTML = `<span class="phraseloop-loop-label"></span><span class="phraseloop-loop-time"></span>`;
-    main.querySelector(".phraseloop-loop-label")!.textContent = loop.label;
-    main.querySelector(".phraseloop-loop-time")!.textContent =
-      `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.createdAt)}`;
-    main.addEventListener("click", () => this.actions.startLoop(loop));
-    row.append(main);
-
-    const actions = element("div", "phraseloop-loop-actions");
-    const iconRow = element("div", "phraseloop-loop-icon-row");
-
-    const renameButton = button("✎", `Rename ${loop.label}`);
-    renameButton.className = "phraseloop-icon-button";
-    renameButton.setAttribute("aria-label", `Rename ${loop.label}`);
-    renameButton.addEventListener("click", () => this.renderRenameRow(row, loop));
-    iconRow.append(renameButton);
-
-    const deleteButton = button("x", `Delete ${loop.label}`);
-    deleteButton.className = "phraseloop-icon-button";
-    deleteButton.addEventListener("click", () => this.actions.deleteLoop(loop));
-    iconRow.append(deleteButton);
-
-    const status = getLoopStatus(loop);
-    const statusButton = button(formatLoopStatus(status), `Mark ${loop.label} as ${formatLoopStatus(nextLoopStatus(status))}`);
-    statusButton.className = `phraseloop-status-button is-${status}`;
-    statusButton.setAttribute("aria-label", `Loop status: ${formatLoopStatus(status)}`);
-    statusButton.addEventListener("click", () => this.actions.setLoopStatus(loop, nextLoopStatus(status)));
-    const importButton = button(loop.lastImportedHash ? "Sent" : "Send", `Send ${loop.label} to local dictation`);
-    importButton.className = "phraseloop-status-button";
-    importButton.addEventListener("click", () => this.actions.importLoop(loop));
-    actions.append(iconRow, statusButton, importButton);
-    row.append(actions);
-    return row;
-  }
-
-  private renderRenameRow(row: HTMLElement, loop: Loop): void {
-    row.innerHTML = "";
-    const input = document.createElement("textarea");
-    input.className = "phraseloop-rename-input";
-    input.value = loop.label;
-    input.rows = 3;
-
-    let done = false;
-    const save = () => {
-      if (done) return;
-      done = true;
-      this.actions.renameLoop(loop, input.value);
-    };
-    const cancel = () => {
-      if (done) return;
-      done = true;
-      this.render();
-    };
-
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        save();
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        cancel();
-      }
-    });
-    input.addEventListener("blur", save);
-    row.append(input);
-    input.focus();
-    input.select();
-  }
-
   private renderDebugRecords(records: DebugRecord[]): HTMLElement {
     const outer = element("div", "phraseloop-debug-wrap");
 
@@ -496,43 +372,12 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", 
   return node;
 }
 
-function getLoopStatus(loop: Loop): LoopStatus {
-  return loop.status ?? "new";
-}
-
-function nextLoopStatus(status: LoopStatus): LoopStatus {
-  if (status === "new") return "hard";
-  if (status === "hard") return "done";
-  return "new";
-}
-
-function formatLoopStatus(status: LoopStatus): string {
-  if (status === "hard") return "Hard";
-  if (status === "done") return "Done";
-  return "New";
-}
-
 function button(text: string, title: string): HTMLButtonElement {
   const node = document.createElement("button");
   node.type = "button";
   node.textContent = text;
   node.title = title;
   return node;
-}
-
-function formatMinute(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--/-- --:--";
-
-  return [
-    String(date.getMonth() + 1).padStart(2, "0"),
-    "/",
-    String(date.getDate()).padStart(2, "0"),
-    " ",
-    String(date.getHours()).padStart(2, "0"),
-    ":",
-    String(date.getMinutes()).padStart(2, "0")
-  ].join("");
 }
 
 function formatDetails(details: unknown): string {

@@ -100,17 +100,16 @@ PhraseLoopData/
 }
 ```
 
-### 4.3 확장 프로그램 변경 (최소한만)
+### 4.3 확장 프로그램 = 전송 큐 (capture buffer)
 
-기존 A/B 선택·트림·미리듣기·자막 후보·라벨 UI는 이미 구현되어 있으므로 그대로 쓴다. 추가할 것:
+확장은 채집과 전송만 담당하며, 라이브러리/학습 관리 기능은 없다. 데이터 원본은 항상 `PhraseLoopData/`이고, 확장과 로컬 앱 사이에 동기화는 없다 — **순차적 이동**만 있다.
 
-- 패널에 **"로컬로 가져오기"** 버튼: 클릭 시 `fetch`로 서버 `POST /import` 호출 (loopId, videoId, title, url, start, end, label, channelTitle, channelAvatarUrl 전달 — label이 로컬 앱의 `transcriptDraft`가 되고, channelTitle/channelAvatarUrl은 확장이 이미 수집하는 값을 그대로 사용). 성공 시 서버가 반환한 `captureHash`를 루프의 `lastImportedHash`로 기록.
-- 현재 구간의 `(videoId, start, end, label)` hash와 `lastImportedHash`가 다르면 변경 후 미전송 상태다.
-- 서버가 꺼져 있으면 실패 표시만 하고 데이터는 지금처럼 `chrome.storage.local`에 남는다. **별도 큐 시스템 불필요** — hash 불일치 루프가 곧 미전송 목록.
-- 라이브러리 페이지에 "미전송 N건 모두 보내기" 버튼.
-- 설정 페이지에 서버 URL(기본 `http://127.0.0.1:17311`)과 토큰 입력란.
-
-**MVP에서 확장의 기존 기능을 제거하지 않는다.** 특히 루프 status(new/hard/done)와 관련 UI는 타입·storage·import/export 검증에 걸쳐 있으므로 지금 건드리지 않는다. 학습 관리가 로컬 앱/Anki로 이관되면 status는 무의미해지므로, **파이프라인 검증 후 후속 정리**로 다음을 계획한다: status 상태 UI(순환 버튼, 필터 칩) 제거, 라이브러리 필터를 전송 상태(미전송/전송됨) 기준으로 교체.
+- 캡처 UX(A/B 마커, 트림, 미리듣기, 자막 라벨 수집, 단축키)는 유지.
+- 저장 시 `POST /import`로 전송 (loopId, videoId, title, url, start, end, label, channelTitle, channelAvatarUrl — label이 로컬 앱의 `transcriptDraft`가 된다).
+- **전송 성공 = 확장 storage에서 해당 루프 삭제.** 따라서 확장에 남아 있는 루프 = 미전송분 전부이며, 불일치라는 개념이 없다. hash 추적 불필요.
+- 팝업 = 미전송 큐: 대기 루프 목록, "모두 보내기", 개별 삭제, Dictation 앱 열기, 설정 링크.
+- 설정 페이지: 서버 URL(기본 `http://127.0.0.1:17311`) + 토큰 + 페어링. JSON 백업/가져오기·Anki JSON 내보내기는 제거 (원본이 로컬 앱으로 이동했으므로).
+- 라이브러리 페이지, 루프 status(new/hard/done), 진행 위치 저장, `pl_loop` 딥링크는 삭제됨 (git 히스토리에 보존).
 
 ## 5. 서버 API (개요)
 

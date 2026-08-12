@@ -14,18 +14,19 @@
           <div id="summary" class="summary">Loading...</div>
         </div>
         <div class="header-actions">
-          <button id="libraryButton" class="icon-button" type="button" title="Library" aria-label="Library">☰</button>
           <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Settings">⚙</button>
         </div>
       </header>
 
-      <label class="search-wrap">
-        <span class="field-label">Search</span>
-        <input id="searchInput" type="search" placeholder="Video title or loop label" />
-      </label>
+      <div class="button-row">
+        <button id="sendAllButton" type="button">Send all</button>
+        <button id="openDictationButton" type="button">Open Dictation</button>
+      </div>
 
-      <section class="section" aria-label="Saved videos">
-        <div id="videoList" class="video-list"></div>
+      <div id="status" class="status" role="status"></div>
+
+      <section class="section" aria-label="Pending loops">
+        <div id="loopList" class="loop-list"></div>
       </section>
     </main>
   </body>

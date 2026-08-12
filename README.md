@@ -1,30 +1,39 @@
 # PhraseLoop
 
-PhraseLoop is a Chrome Extension for saving and replaying multiple A-B loops on YouTube. It is built for language listening, shadowing, and review workflows where you want to capture difficult phrases and replay them later.
+PhraseLoop is a Chrome Extension that captures A-B loop sections on YouTube and sends them to a local companion server for dictation practice. The companion (`scripts/companion/`) is the single source of truth for all saved loops, transcripts, and generated media; the extension is only a capture and send queue.
 
 ## Features
 
-- Save multiple A-B loops per YouTube video
-- Click a saved loop to jump to the range and start repeat playback
-- Auto-generate loop names from visible YouTube captions when captions are enabled
+- Set A/B markers on the current YouTube video and fine-tune them with a trim editor
+- Preview or repeat the draft loop before sending
+- Auto-generate loop labels from visible YouTube captions when captions are enabled
 - Fall back to time-range labels when caption text is unavailable
-- Rename and delete saved loops inline
-- Mark loops as `New`, `Hard`, or `Done`
-- Manually save and restore progress per video
-- Browse saved videos and loops in the extension Library
-- Export and import the local library as JSON
+- Send the loop to the local dictation companion with one click
+- Pending queue: loops that could not be sent (companion off, send failed) stay in the extension until sent or deleted
 - Keyboard shortcuts for fast loop creation
 
 ## How It Works
 
-PhraseLoop runs as a content script on YouTube watch pages. It controls the existing `HTMLVideoElement` directly:
+PhraseLoop runs as a content script on YouTube watch pages and controls the existing `HTMLVideoElement` directly:
 
-- Set marker A from the current playback time
-- Set marker B from the current playback time
-- Save the valid range to `chrome.storage.local`
-- Click a saved loop to seek to `start` and repeat until `end`
+1. Set marker A and marker B from the current playback time.
+2. Optionally trim the range and edit the caption-based label.
+3. Save. The loop is written to `chrome.storage.local` and immediately sent to the companion (`POST /import`, proxied through the extension service worker).
+4. On success the loop is deleted from extension storage. On failure it stays pending; retry from the popup with **Send all**.
+
+Presence in `chrome.storage.local` means "not yet sent" — the extension never keeps loops that the companion has accepted.
 
 Caption-based labels are collected from visible YouTube caption text while marking A to B. PhraseLoop does not fetch or store full transcripts.
+
+## Popup
+
+The toolbar popup shows the pending queue:
+
+- Each pending loop with its video title, label, and time range
+- **Send all** to retry sending every pending loop
+- Per-loop delete
+- **Open Dictation** to open the companion web app
+- Settings shortcut
 
 ## Installation for Development
 
@@ -44,14 +53,11 @@ After making code changes, run `npm run build` again and reload the extension fr
 
 ## Usage
 
-1. Open a YouTube video.
-2. Expand the PhraseLoop panel in the right sidebar.
+1. Start the companion (`npm run companion`) and pair it once in Settings.
+2. Open a YouTube video and expand the PhraseLoop panel in the right sidebar.
 3. Enable YouTube captions if you want caption-based loop names.
-4. Click `A` at the start of the phrase.
-5. Click `B` at the end of the phrase.
-6. Edit the generated label if needed.
-7. Save the loop.
-8. Click any saved loop to start repeat playback.
+4. Click `A` at the start of the phrase and `B` at the end.
+5. Adjust the range and label if needed, then save. The loop is sent to the companion.
 
 ## Shortcuts
 
@@ -61,26 +67,13 @@ Global shortcuts are ignored while typing in inputs, textareas, selects, or edit
 | --- | --- |
 | `[` | Set A |
 | `]` | Set B |
-| `\` | Save Loop |
+| `\` | Save & send loop |
 | `Esc` | Stop active loop |
 | `Enter` | Save while the PhraseLoop label field is focused |
 
-## Library and Backup
-
-PhraseLoop stores data locally with `chrome.storage.local`. It does not use automatic Chrome sync or OneDrive sync.
-
-Use the extension settings page to:
-
-- Export your library as JSON
-- Import a JSON backup
-- Merge imported data into the current library
-- Replace the current library with imported data
-
-Merge mode avoids data loss by deduplicating loops by stable ID first, then by near-identical time ranges and normalized labels.
-
 ## Data Model
 
-PhraseLoop stores compact per-video data:
+The extension stores only pending (not yet sent) loops in `chrome.storage.local`:
 
 ```json
 {
@@ -91,17 +84,13 @@ PhraseLoop stores compact per-video data:
       "title": "Video title",
       "channelTitle": "Channel name",
       "url": "https://www.youtube.com/watch?v=videoId",
-      "progress": {
-        "time": 123.4,
-        "updatedAt": "2026-05-19T12:00:00.000Z"
-      },
       "loops": [
         {
           "id": "lp_...",
           "start": 72.4,
           "end": 78.9,
           "label": "could have been better",
-          "status": "hard",
+          "createdAt": "2026-05-19T12:00:00.000Z",
           "updatedAt": "2026-05-19T12:00:00.000Z"
         }
       ]
@@ -109,6 +98,8 @@ PhraseLoop stores compact per-video data:
   }
 }
 ```
+
+A video entry is removed as soon as its last loop is sent or deleted.
 
 ## Development
 
@@ -118,9 +109,23 @@ npm test
 npx tsc --noEmit
 ```
 
-## Anki Media Export
+## Local Dictation Companion
 
-PhraseLoop can export saved loops as Anki metadata, then a local Windows script can create media files and a CSV import file.
+The companion stores imported loops and generated MP3 files in a local `PhraseLoopData` folder and serves the dictation review UI on `127.0.0.1`.
+
+Requirements: `yt-dlp` and `ffmpeg` must be available on `PATH`. For automatic card creation, install AnkiConnect (add-on code `2055492159`) and keep Anki Desktop running while adding or updating cards.
+
+```powershell
+npm run companion
+```
+
+On first run, copy the token printed by the command (or read it from `PhraseLoopData/config.json`). In the extension Settings page, enter the token under **Local Dictation Companion** and click **Save & Connect**. Saved YouTube loops are then sent automatically; failed sends stay in the popup queue.
+
+Open `http://127.0.0.1:17311` to practice dictation, correct the captured caption draft, add an optional meaning, notes, and tags, then mark the transcript reviewed. Discarded items stay tombstoned and are not recreated by later imports. Reviewed items can be added directly to the `English::PhraseLoop` Anki deck; sending the same LoopId again updates the existing note. The Anki card plays only the audio on the front and shows the transcript, optional meaning, notes, local thumbnail, and source details on the back. All source metadata, review data, and generated media remain in the local `PhraseLoopData` folder.
+
+## Anki Media Export CLI (legacy fallback)
+
+This is a legacy path from before the companion existed. Prefer the companion's built-in Anki integration; use this only if you have an old `PhraseLoopAnkiExport` JSON file.
 
 Requirements:
 
@@ -129,9 +134,7 @@ winget install yt-dlp.yt-dlp
 winget install Gyan.FFmpeg
 ```
 
-1. Open PhraseLoop Settings.
-2. Click `Export Anki JSON`.
-3. Run the local generator. By default it downloads only each loop section, which is best for long videos and many short clips:
+Run the local generator against an exported Anki JSON file. By default it downloads only each loop section, which is best for long videos and many short clips:
 
 ```powershell
 node scripts/export-anki.mjs "$env:USERPROFILE\Downloads\phraseloop-anki-YYYY-MM-DD.json" "$env:USERPROFILE\Desktop\phraseloop-anki"
@@ -147,20 +150,6 @@ phraseloop-anki/
 ```
 
 Import `phraseloop-anki.csv` into Anki and copy the files from `media/` into your Anki collection media folder. The CSV uses `[sound:...]` references for each loop.
-
-## Local Dictation Companion
-
-The companion stores imported loops and generated MP3 files in a local `PhraseLoopData` folder and serves the dictation review UI on `127.0.0.1`.
-
-Requirements: `yt-dlp` and `ffmpeg` must be available on `PATH`. For automatic card creation, install AnkiConnect (add-on code `2055492159`) and keep Anki Desktop running while adding or updating cards.
-
-```powershell
-npm run companion
-```
-
-On first run, copy the token printed by the command (or read it from `PhraseLoopData/config.json`). In the extension Settings page, enter the token under **Local Dictation Companion** and click **Save & Connect**. A saved YouTube loop can then be sent with its **Send** button.
-
-Open `http://127.0.0.1:17311` to practice dictation, correct the captured caption draft, add an optional meaning, notes, and tags, then mark the transcript reviewed. Discarded items stay tombstoned and are not recreated by later imports. Reviewed items can be added directly to the `English::PhraseLoop` Anki deck; sending the same LoopId again updates the existing note. The Anki card plays only the audio on the front and shows the transcript, optional meaning, notes, local thumbnail, and source details on the back. All source metadata, review data, and generated media remain in the local `PhraseLoopData` folder.
 
 Optional video clips:
 
@@ -178,13 +167,13 @@ This downloads each source video/audio once and cuts clips locally. It is usuall
 
 ## Current Scope
 
-PhraseLoop is currently an MVP. The extension focuses on A-B loop creation, replay, local storage, Library management, progress markers, and JSON import/export.
+The extension is intentionally minimal: capture A-B loops on YouTube and send them to the local companion. Loop management, review, transcripts, and Anki integration all live in the companion.
 
-Out of scope for the current version:
+Out of scope for the extension:
 
+- Storing a permanent loop library (the companion owns all sent loops)
 - Full transcript fetching
 - Notes and translations
-- Anki export
 - Automatic cross-device sync
 - Chrome Web Store packaging
 

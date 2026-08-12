@@ -1,13 +1,6 @@
-import { LOOP_URL_PARAM } from "../shared/constants";
-
 export function getVideoIdFromUrl(url = window.location.href): string | null {
   const parsed = new URL(url);
   return parsed.searchParams.get("v");
-}
-
-export function getLoopIdFromUrl(url = window.location.href): string | null {
-  const parsed = new URL(url);
-  return parsed.searchParams.get(LOOP_URL_PARAM);
 }
 
 export function getWatchUrl(videoId: string): string {
