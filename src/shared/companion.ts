@@ -44,22 +44,20 @@ export async function importLoopToCompanion(config: CompanionConfig, video: Vide
 
 async function request(config: CompanionConfig, path: string, init: RequestInit): Promise<any> {
   if (!config.token.trim()) throw new Error("Configure the companion token in PhraseLoop Settings first.");
-  let response: Response;
+  let response: { ok: boolean; status: number; body: any };
   try {
-    response = await fetch(`${normalizeUrl(config.url)}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${config.token.trim()}`,
-        "Content-Type": "application/json",
-        ...init.headers
-      }
+    response = await chrome.runtime.sendMessage({
+      type: "phraseloop-companion-request",
+      config: { url: normalizeUrl(config.url), token: config.token.trim() },
+      path,
+      method: init.method ?? "GET",
+      ...(typeof init.body === "string" ? { body: init.body } : {})
     });
   } catch {
     throw new Error("Could not connect to PhraseLoop Companion. Start the local companion and try again.");
   }
-  const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(body?.error || `Companion request failed (${response.status}).`);
-  return body;
+  if (!response?.ok) throw new Error(response?.body?.error || `Companion request failed (${response?.status ?? 0}).`);
+  return response.body;
 }
 
 function normalizeUrl(value: string): string {
