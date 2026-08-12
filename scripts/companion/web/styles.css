@@ -65,12 +65,6 @@ label { display: grid; gap: 3px; font-weight: 600; font-size: 12px; color: #4553
 label textarea, label input { font-size: 14px; font-weight: 400; color: #172033; }
 .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-.feedback { display: grid; gap: 2px; }
-.feedback:empty { display: none; }
-.word-line { margin: 0; font-size: 17px; line-height: 1.5; }
-.word-good { color: #14804a; }
-.word-missed { color: #c73535; }
-
 .review-actions { align-items: center; }
 .review-actions .spacer { flex: 1; }
 

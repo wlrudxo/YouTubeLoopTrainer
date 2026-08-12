@@ -41,21 +41,12 @@
           </div>
         </header>
 
-        <section class="card dictation-card">
+        <section class="card review-card">
           <div class="audio-row">
             <audio data-role="audio" controls preload="metadata"></audio>
             <button type="button" data-action="replay">Replay (Ctrl)</button>
           </div>
           <p class="muted processing-note" data-role="processing"></p>
-          <textarea data-role="answer" rows="2" placeholder="Type what you hear... (Enter to check)"></textarea>
-          <div class="button-row">
-            <button type="button" data-action="check" class="primary">Check</button>
-            <button type="button" data-action="reveal">Show answer</button>
-          </div>
-          <div data-role="feedback" class="feedback" aria-live="polite"></div>
-        </section>
-
-        <section class="card review-card">
           <label>Transcript<textarea data-role="transcript" rows="2"></textarea></label>
           <div class="field-pair">
             <label>Meaning<textarea data-role="meaning" rows="2" placeholder="Optional translation or meaning"></textarea></label>

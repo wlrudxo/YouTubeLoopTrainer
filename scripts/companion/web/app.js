@@ -126,7 +126,6 @@ function renderWorkspace(item) {
 
   const audio = role(root, "audio");
   audio.src = `/media/${item.videoId}/${item.loopId}/audio.mp3`;
-  const answer = role(root, "answer");
   const transcript = role(root, "transcript");
   transcript.value = item.transcript || item.transcriptDraft || "";
   role(root, "meaning").value = item.meaning || "";
@@ -139,8 +138,6 @@ function renderWorkspace(item) {
     showMessage(root, "MP3 processing queued.");
     window.setTimeout(loadItems, 1000);
   });
-  action(root, "check", () => showFeedback(root, answer.value, transcript.value, false));
-  action(root, "reveal", () => showFeedback(root, answer.value, transcript.value, true));
   action(root, "save", async () => {
     try {
       await saveFields(root, item);
@@ -183,13 +180,6 @@ function renderWorkspace(item) {
       ankiButton.disabled = false;
     }
   });
-  answer.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      showFeedback(root, answer.value, transcript.value, false);
-    }
-  });
-
   workspace.innerHTML = "";
   workspace.append(fragment);
 }
@@ -206,34 +196,6 @@ async function saveFields(root, item) {
   });
   state.selected = updated;
   return updated;
-}
-
-function showFeedback(root, typed, correct, reveal) {
-  const feedback = role(root, "feedback");
-  feedback.innerHTML = "";
-  if (!correct.trim()) {
-    feedback.textContent = "Review and save a transcript first.";
-    return;
-  }
-  const typedWords = normalize(typed).split(" ").filter(Boolean);
-  const correctWords = normalize(correct).split(" ").filter(Boolean);
-  const exact = typedWords.join(" ") === correctWords.join(" ");
-  const heading = document.createElement("strong");
-  heading.textContent = exact ? "Correct" : "Try again";
-  const line = document.createElement("p");
-  line.className = "word-line";
-  correctWords.forEach((word, index) => {
-    const span = document.createElement("span");
-    const matched = typedWords[index] === word;
-    span.className = matched ? "word-good" : "word-missed";
-    span.textContent = matched || reveal ? word : "*".repeat([...word].length);
-    line.append(span, " ");
-  });
-  feedback.append(heading, line);
-}
-
-function normalize(value) {
-  return value.toLocaleLowerCase().replace(/[\p{P}\p{S}]+/gu, " ").replace(/\s+/g, " ").trim();
 }
 
 async function api(path, init = {}) {
