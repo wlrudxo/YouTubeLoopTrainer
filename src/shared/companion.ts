@@ -35,6 +35,7 @@ export async function importLoopToCompanion(config: CompanionConfig, video: Vide
       label: loop.label,
       title: video.title,
       channelTitle: video.channelTitle ?? "",
+      channelAvatarUrl: video.channelAvatarUrl ?? "",
       url: video.url
     })
   });

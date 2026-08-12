@@ -66,20 +66,13 @@
           <h3>Manual review</h3>
           <p class="muted">Compare the draft with the audio and save one canonical transcript.</p>
           <label>Transcript<textarea data-role="transcript" rows="4"></textarea></label>
-          <label>Difficulty
-            <select data-role="difficulty">
-              <option value="">Unspecified</option>
-              <option value="easy">Easy</option>
-              <option value="normal">Normal</option>
-              <option value="hard">Hard</option>
-            </select>
-          </label>
-          <label>Alternatives<textarea data-role="alternatives" rows="2" placeholder="One accepted answer per line"></textarea></label>
+          <label>Meaning<textarea data-role="meaning" rows="3" placeholder="Optional translation or meaning"></textarea></label>
           <label>Notes<textarea data-role="notes" rows="3"></textarea></label>
           <label>Tags<input data-role="tags" type="text" placeholder="conversation, pronunciation" /></label>
           <div class="button-row">
             <button type="button" data-action="save">Save draft</button>
             <button type="button" data-action="ready" class="primary">Mark reviewed</button>
+            <button type="button" data-action="discard" class="danger">Discard</button>
             <button type="button" data-action="anki">Add to Anki</button>
           </div>
         </section>

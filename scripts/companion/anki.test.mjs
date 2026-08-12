@@ -22,10 +22,11 @@ async function readyItem() {
     url: "https://www.youtube.com/watch?v=video_anki"
   });
   await writeFile(join(dataDir, "videos", "video_anki", "loops", "lp_anki", "audio.mp3"), "audio");
+  await writeFile(join(dataDir, "videos", "video_anki", "thumbnail.jpg"), "thumbnail");
   await updateProcessing(dataDir, "video_anki", "lp_anki", { status: "complete", attempts: 1 });
   await patchItem(dataDir, "video_anki", "lp_anki", {
     transcript: "Where is Jane?",
-    difficulty: "hard",
+    meaning: "제인은 어디 있나요?",
     tags: ["conversation"],
     reviewStatus: "ready"
   });
@@ -58,10 +59,19 @@ describe("Anki sync", () => {
     const anki = fakeAnki();
     const result = await syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: anki.invoke });
     expect(result).toMatchObject({ noteId: 789, created: true });
-    expect(anki.calls.map((call) => call.action)).toContain("createModel");
+    const createModel = anki.calls.find((call) => call.action === "createModel");
+    expect(createModel.params.inOrderFields).toEqual([
+      "LoopId", "Audio", "Transcript", "Meaning", "Notes", "Thumbnail",
+      "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"
+    ]);
+    expect(createModel.params.cardTemplates[0].Front).toBe("{{Audio}}");
+    expect(createModel.params.cardTemplates[0].Front).not.toContain("type:");
     const add = anki.calls.find((call) => call.action === "addNote");
     expect(add.params.note.fields.Transcript).toBe("Where is Jane?");
-    expect(add.params.note.tags).toContain("phraseloop::hard");
+    expect(add.params.note.fields.Meaning).toBe("제인은 어디 있나요?");
+    expect(add.params.note.fields.SourceUrl).toContain("t=1s");
+    expect(add.params.note.fields.Thumbnail).toContain("phraseloop_thumb_video_anki.jpg");
+    expect(add.params.note.tags).toContain("conversation");
     expect((await getItem(dataDir, "video_anki", "lp_anki")).anki.status).toBe("synced");
   });
 

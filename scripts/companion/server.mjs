@@ -3,9 +3,10 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { allowOrigin, getItem, importCapture, initializeDataRoot, InputError, listItems, patchItem } from "./storage.mjs";
+import { allowOrigin, discardItem, getItem, importCapture, initializeDataRoot, InputError, listItems, patchItem } from "./storage.mjs";
 import { enqueueMediaProcessing } from "./media.mjs";
 import { syncItemToAnki } from "./anki.mjs";
+import { ensureVideoAssets } from "./assets.mjs";
 
 const MAX_BODY_BYTES = 128 * 1024;
 
@@ -14,6 +15,7 @@ export async function createCompanionServer(options = {}) {
   const initialized = await initializeDataRoot(dataDir, options.port ?? 17311);
   const config = initialized.config;
   const enqueueMedia = options.enqueueMediaProcessing ?? enqueueMediaProcessing;
+  const ensureAssets = options.ensureVideoAssets ?? ensureVideoAssets;
 
   const server = createServer(async (request, response) => {
     try {
@@ -55,10 +57,16 @@ export async function createCompanionServer(options = {}) {
       }
 
       if (request.method === "POST" && url.pathname === "/import") {
-        const result = await importCapture(dataDir, await readJsonBody(request));
-        if (result.changed || result.item.processing?.status === "error") {
+        const capture = await readJsonBody(request);
+        const result = await importCapture(dataDir, capture);
+        if (!result.discarded && (result.changed || result.item.processing?.status === "error")) {
           void enqueueMedia(dataDir, result.item.videoId, result.item.loopId).catch((error) => {
             console.error(`Media processing failed for ${result.item.loopId}:`, error.message);
+          });
+        }
+        if (!result.discarded) {
+          void ensureAssets(dataDir, result.item).catch((error) => {
+            console.error(`Asset processing failed for ${result.item.videoId}:`, error.message);
           });
         }
         sendJson(response, result.created ? 201 : 200, {
@@ -67,7 +75,8 @@ export async function createCompanionServer(options = {}) {
           captureHash: result.item.captureHash,
           processing: result.item.processing,
           created: result.created,
-          changed: result.changed
+          changed: result.changed,
+          discarded: result.discarded
         });
         return;
       }
@@ -101,6 +110,20 @@ export async function createCompanionServer(options = {}) {
         return;
       }
 
+      const imageMatch = /^\/media\/([A-Za-z0-9_-]{1,128})\/(thumbnail|channel)\.jpg$/.exec(url.pathname);
+      if (request.method === "GET" && imageMatch) {
+        const imagePath = join(dataDir, "videos", imageMatch[1], `${imageMatch[2]}.jpg`);
+        try {
+          const image = await readFile(imagePath);
+          response.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=3600" });
+          response.end(image);
+        } catch (error) {
+          if (error?.code === "ENOENT") sendJson(response, 404, { error: "Image not found." });
+          else throw error;
+        }
+        return;
+      }
+
       const processMatch = /^\/api\/items\/([A-Za-z0-9_-]{1,128})\/([A-Za-z0-9_-]{1,128})\/process$/.exec(url.pathname);
       if (request.method === "POST" && processMatch) {
         const item = await getItem(dataDir, processMatch[1], processMatch[2]);
@@ -128,6 +151,15 @@ export async function createCompanionServer(options = {}) {
           return;
         }
         sendJson(response, 200, item);
+        return;
+      }
+      if (request.method === "DELETE" && itemMatch) {
+        const discarded = await discardItem(dataDir, itemMatch[1], itemMatch[2]);
+        if (!discarded) {
+          sendJson(response, 404, { error: "Item not found." });
+          return;
+        }
+        sendJson(response, 200, { discarded: true, captureHash: discarded.captureHash });
         return;
       }
 
@@ -182,7 +214,7 @@ function handleCors(request, response, config, pathname) {
   response.setHeader("Access-Control-Allow-Origin", origin);
   response.setHeader("Vary", "Origin");
   response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-  response.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
+  response.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   return true;
 }
 

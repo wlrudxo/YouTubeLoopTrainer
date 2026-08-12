@@ -18,7 +18,8 @@ async function startTestServer() {
   const companion = await createCompanionServer({
     dataDir,
     port: 17311,
-    enqueueMediaProcessing: async () => undefined
+    enqueueMediaProcessing: async () => undefined,
+    ensureVideoAssets: async () => undefined
   });
   await new Promise((resolve, reject) => {
     companion.server.once("error", reject);
@@ -97,6 +98,46 @@ describe("companion HTTP server", () => {
       }
     });
     expect(response.status).toBe(403);
+  });
+
+  it("deletes a local item and keeps later imports tombstoned", async () => {
+    const companion = await startTestServer();
+    const page = await fetch(`${companion.baseUrl}/`);
+    const cookie = page.headers.get("set-cookie").split(";")[0];
+    const payload = {
+      loopId: "lp_discard",
+      videoId: "video_discard",
+      start: 4,
+      end: 7,
+      label: "not worth reviewing",
+      title: "Discard test",
+      url: "https://www.youtube.com/watch?v=video_discard"
+    };
+    const importHeaders = {
+      Authorization: `Bearer ${companion.config.token}`,
+      "Content-Type": "application/json"
+    };
+    expect((await fetch(`${companion.baseUrl}/import`, {
+      method: "POST",
+      headers: importHeaders,
+      body: JSON.stringify(payload)
+    })).status).toBe(201);
+
+    const removed = await fetch(`${companion.baseUrl}/api/items/video_discard/lp_discard`, {
+      method: "DELETE",
+      headers: { Cookie: cookie }
+    });
+    expect(removed.status).toBe(200);
+
+    const importedAgain = await fetch(`${companion.baseUrl}/import`, {
+      method: "POST",
+      headers: importHeaders,
+      body: JSON.stringify(payload)
+    });
+    const body = await importedAgain.json();
+    expect(importedAgain.status).toBe(200);
+    expect(body.discarded).toBe(true);
+    expect(body.captureHash).toMatch(/^sha256:/);
   });
 
   it("pairs an authenticated Chrome extension origin", async () => {

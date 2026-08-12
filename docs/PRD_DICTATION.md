@@ -65,7 +65,9 @@ PhraseLoopData/
   library.json           # 전체 아이템 인덱스 (목록 화면용 캐시)
   videos/
     VIDEO_ID/
-      source.json        # 영상 제목, 채널, URL
+      source.json        # 영상 제목, 채널명, URL
+      thumbnail.jpg      # 영상 썸네일 (i.ytimg.com/vi/VIDEO_ID/mqdefault.jpg, import 시 1회 다운로드)
+      channel.jpg        # 채널 아바타 (import 시점 스냅샷, 1회 다운로드)
       loops/
         LOOP_ID/
           audio.mp3
@@ -84,8 +86,7 @@ PhraseLoopData/
   "review": { "status": "needs_review", "verifiedAt": null },
   "transcript": "검수 후 확정된 canonical 문장",
   "transcriptDraft": "확장이 수집한 화면 자막 label (초안)",
-  "difficulty": null,
-  "alternatives": [],
+  "meaning": "",
   "notes": "",
   "sourceTitle": "...", "sourceUrl": "...",
   "createdAt": "...", "updatedAt": "...",
@@ -103,7 +104,7 @@ PhraseLoopData/
 
 기존 A/B 선택·트림·미리듣기·자막 후보·라벨 UI는 이미 구현되어 있으므로 그대로 쓴다. 추가할 것:
 
-- 패널에 **"로컬로 가져오기"** 버튼: 클릭 시 `fetch`로 서버 `POST /import` 호출 (loopId, videoId, title, url, start, end, label 전달 — label이 로컬 앱의 `transcriptDraft`가 된다). 성공 시 서버가 반환한 `captureHash`를 루프의 `lastImportedHash`로 기록.
+- 패널에 **"로컬로 가져오기"** 버튼: 클릭 시 `fetch`로 서버 `POST /import` 호출 (loopId, videoId, title, url, start, end, label, channelTitle, channelAvatarUrl 전달 — label이 로컬 앱의 `transcriptDraft`가 되고, channelTitle/channelAvatarUrl은 확장이 이미 수집하는 값을 그대로 사용). 성공 시 서버가 반환한 `captureHash`를 루프의 `lastImportedHash`로 기록.
 - 현재 구간의 `(videoId, start, end, label)` hash와 `lastImportedHash`가 다르면 변경 후 미전송 상태다.
 - 서버가 꺼져 있으면 실패 표시만 하고 데이터는 지금처럼 `chrome.storage.local`에 남는다. **별도 큐 시스템 불필요** — hash 불일치 루프가 곧 미전송 목록.
 - 라이브러리 페이지에 "미전송 N건 모두 보내기" 버튼.
@@ -114,18 +115,21 @@ PhraseLoopData/
 | 메서드/경로 | 역할 |
 |---|---|
 | `POST /pair` | 올바른 토큰을 제시한 Chrome 확장 origin을 CORS 허용 목록에 등록 |
-| `POST /import` | 구간 수신 → 폴더 생성 → MP3 추출 시작 (idempotent: 같은 loopId 재수신 시 갱신) |
+| `POST /import` | 구간 수신 → 폴더 생성 → MP3 추출 시작 + 영상 썸네일·채널 아바타 최초 1회 다운로드 (idempotent: 같은 loopId 재수신 시 갱신) |
 | `GET /api/items` | 아이템 목록 (상태 필터) |
 | `GET /api/items/:videoId/:loopId` | 아이템 조회 |
-| `PATCH /api/items/:videoId/:loopId` | transcript·alternatives·difficulty·notes·tags·review 상태 수정(allowlist) |
+| `PATCH /api/items/:videoId/:loopId` | transcript·meaning·notes·tags·review 상태 수정(allowlist) |
+| `DELETE /api/items/:videoId/:loopId` | 아이템 버리기 (쉬워서 Anki에 안 넣을 항목 정리). loopId를 tombstone 목록에 기록 |
 | `POST /api/items/:videoId/:loopId/process` | MP3 생성 또는 실패 작업 재시도 |
 | `POST /api/items/:videoId/:loopId/anki` | Anki에 추가 또는 업데이트 |
 | `GET /media/...` | mp3 서빙 |
 | `GET /` | Dictation 웹앱 |
 
+**Discard tombstone**: 버린 loopId는 `PhraseLoopData/discarded.json`에 기록한다. 해당 loopId가 `POST /import`로 재수신되면 아이템을 되살리지 않고 무시하되, 성공 응답(captureHash 포함)을 반환해 확장이 재전송을 멈추게 한다. (확장의 "미전송 일괄 전송"이 버린 아이템을 부활시키는 것을 방지)
+
 ## 6. Dictation / 검수 화면
 
-목록 화면: 상태별 필터(needs_review / ready / in_anki), 영상별 그룹.
+목록 화면: 상태별 필터(needs_review / ready / in_anki), 영상별 그룹. 각 영상 그룹에 영상 썸네일·채널 아바타·채널명·영상 제목을 표시해 어떤 영상에서 온 구간인지 한눈에 알 수 있게 한다. 이미지는 로컬 저장본(`thumbnail.jpg`, `channel.jpg`)을 서빙 — 외부 URL 핫링크에 의존하지 않는다 (아바타 URL은 시간이 지나면 만료될 수 있음).
 
 문제 화면 — 한 아이템씩 진행:
 
@@ -136,26 +140,35 @@ PhraseLoopData/
 5. 다시 듣기 (단축키: Ctrl 단독 또는 버튼)
 6. 정답 공개 (Esc)
 7. 스크립트 직접 수정 — `transcriptDraft`(확장이 수집한 화면 자막)를 실제 음성과 대조해 교정하고 canonical `transcript`로 확정. 추출된 MP3가 구간을 잘못 잘랐는지(음성 잘림 등)도 이 단계에서 확인
-8. **난이도 부여**: easy / normal / hard (또는 미지정). 목록 필터와 Anki 태그로 사용
-9. "검수 완료(ready)" 후 활성화되는 "Anki에 추가"
+8. 판정: **"검수 완료(ready)"** 후 활성화되는 "Anki에 추가", 또는 **"버리기(discard)"** — 받아쓰기가 한 번에 됐을 만큼 쉬운 문장은 Anki에 넣지 않고 버린다
+
+난이도 등급은 두지 않는다. 난이도 평가는 Anki 복습 버튼(Again/Good/Easy)이 이미 수행하며, 쉬운 항목은 애초에 추가하지 않는 것이 선별 원칙이다.
 
 플레이어 설정: 재생 속도(0.5~2x), 자동 반복 횟수, 반복 간격. 진행/설정은 서버 저장 또는 localStorage 아무거나 (학습 기록이 아니므로 중요하지 않음).
 
-검수 필드: Audio(재생만), Transcript, Alternative Answers(로컬 채점 전용), Difficulty, Source Title/URL, Start/End, Notes, Tags. CEFR은 MVP 제외.
+검수 필드: Audio(재생만), Transcript, Meaning, Source Title/URL, Start/End, Notes, Tags. CEFR은 MVP 제외.
+
+대안 철자(alternatives) 개념은 두지 않는다. 채점은 본인 확인용 표시일 뿐 어디에도 기록·판정으로 쓰이지 않으므로, 대소문자·문장부호 무시 수준의 관대한 비교면 충분하다.
+
+- **Meaning**: 선택 입력(빈칸 허용). 듣기가 아니라 문법·단어·뜻이 어려운 문장일 때 사용자가 번역/의미를 수동으로 적는 필드. Anki 카드 뒷면에 그대로 전달된다.
 
 ## 7. Anki 연동 (AnkiConnect)
 
 - AnkiConnect 애드온(코드 2055492159, FooSoft) 사용, `127.0.0.1:8765`. Anki 데스크톱 실행 중이어야 함.
-- "Anki에 추가" 동작 순서: 서버 검수 게이트 확인 → `version` 연결 확인 → `deckNames`/`createDeck` → `modelNames`와 `modelFieldNames`로 "PhraseLoop Dictation" 검증(없으면 `createModel`) → `storeMediaFile`로 `phraseloop_LOOP_ID.mp3` 복사 → 저장된 noteId 조회 또는 LoopId 검색 → `addNote`/`updateNoteFields` → noteId와 contentHash를 item.json에 저장, `anki.status=synced`. 난이도는 노트 태그(`phraseloop::easy` 등)로 전달.
+- "Anki에 추가" 동작 순서: 서버 검수 게이트 확인 → `version` 연결 확인 → `deckNames`/`createDeck` → `modelNames`와 `modelFieldNames`로 "PhraseLoop Dictation" 검증(없으면 `createModel`) → `storeMediaFile`로 `phraseloop_LOOP_ID.mp3` 및 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg` 복사 → 저장된 noteId 조회 또는 LoopId 검색 → `addNote`/`updateNoteFields` → noteId와 contentHash를 item.json에 저장, `anki.status=synced`.
 - **멱등성**: LoopId를 노트 타입의 첫 번째 필드로 두어 중복 감지. noteId가 이미 있으면 버튼은 "Anki 카드 업데이트"(`updateNoteFields`)로 동작. Anki에서 노트가 삭제된 경우(조회 실패)는 재추가 허용. `contentHash` 비교로 "로컬이 Anki보다 새로움" 표시.
-- Alternative Answers는 Anki `{{type:...}}`가 단일 문자열 비교라 카드에서는 사용하지 않는다. **검수 확정된 canonical transcript 하나만 정답으로 사용.**
+- **카드는 타이핑 입력(`{{type:...}}`)을 사용하지 않는다.** 타이핑 훈련은 로컬 Dictation 앱에서 이미 수행했으므로, Anki에서는 듣기 → 머릿속 재구성 → 정답 확인 → 복습 버튼(Again/Hard/Good/Easy) 자가 평가로 진행한다. 모바일 복습이 수월해지고, 구간이 여러 문장이어도 카드로 쓸 수 있다.
+- 영상 썸네일은 **뒷면에만** 표시한다 (앞면에 있으면 영상 맥락이 힌트로 작동). 썸네일 이미지는 `storeMediaFile`로 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg`로 복사하고, `Thumbnail` 필드에 `<img>` 태그로 넣는다.
 
-노트 타입 "PhraseLoop Dictation" — 필드 순서: `LoopId, Audio, Transcript, Notes, SourceTitle, SourceUrl, Start, End`
+노트 타입 "PhraseLoop Dictation" — 필드 순서: `LoopId, Audio, Transcript, Meaning, Notes, Thumbnail, SourceTitle, ChannelTitle, SourceUrl, Start, End`
+
+`Meaning`은 빈칸일 수 있으며, 로컬 앱에서 입력한 번역/의미가 그대로 들어간다.
+
+`SourceTitle`(영상 제목)과 `ChannelTitle`(채널명)은 Anki 노트 필드로 저장되어 뒷면에 표시된다. 채널명은 서버가 `source.json`에서 가져와 채운다.
 
 앞면:
 ```
 {{Audio}}
-<div class="dictation-input">{{type:Transcript}}</div>
 ```
 
 뒷면:
@@ -163,9 +176,14 @@ PhraseLoopData/
 {{FrontSide}}
 <hr id="answer">
 <div class="transcript">{{Transcript}}</div>
+{{#Meaning}}<div class="meaning">{{Meaning}}</div>{{/Meaning}}
 <div class="notes">{{Notes}}</div>
-<a href="{{SourceUrl}}">YouTube 원본</a>
+<a href="{{SourceUrl}}">{{Thumbnail}}</a>
+<div class="source-title">{{SourceTitle}}</div>
+<div class="channel-title">{{ChannelTitle}}</div>
 ```
+
+썸네일 클릭 = YouTube 원본 해당 시점으로 이동 (SourceUrl에 `t=` 파라미터 포함). 별도 텍스트 링크는 두지 않는다.
 
 연결 실패 시: 데이터 손실 없이 안내 메시지 + `[다시 연결]` `[Anki CSV로 내보내기]`. 기존 `scripts/export-anki.mjs` CSV 워크플로는 fallback으로 유지한다.
 
@@ -174,7 +192,7 @@ PhraseLoopData/
 1. companion 서버 골격 + `PhraseLoopData/` 저장 구조 + 토큰 (curl로 검증 가능)
 2. 미디어 파이프라인: 구간 MP3 추출 (transcriptDraft는 확장이 보낸 label 그대로 저장)
 3. 확장의 "로컬로 가져오기" 버튼 + 설정(URL/토큰) + 미전송 일괄 전송
-4. Dictation/검수 웹 화면 (받아쓰기 채점, 스크립트 교정, 난이도 부여)
+4. Dictation/검수 웹 화면 (받아쓰기 채점, 스크립트 교정, 추가/버리기 판정)
 5. AnkiConnect 연결 및 노트 타입 자동 생성
 6. 단건/선택/ready 전체 Anki 추가 + 업데이트(멱등)
 7. CSV 내보내기 fallback 유지 확인
@@ -185,6 +203,7 @@ PhraseLoopData/
 
 - yt-dlp 자막 다운로드 및 cue/구간 매칭 (초안은 확장이 수집한 화면 자막으로 충분; 필요해지면 향후 옵션으로 검토)
 - Whisper 등 음성인식 기반 자막
+- 난이도 등급(easy/normal/hard) — 난이도는 Anki 복습 버튼이 담당하고, 쉬운 항목은 추가하지 않고 버리는 것으로 대체
 - CEFR 자동 판정, 번역, 클라우드 동기화
 - 로컬 앱 내 간격 반복/학습 통계
 - 문장 단위 자동 분할 (구간 하나 = 카드 하나; 긴 구간은 확장에서 애초에 짧게 자르는 것으로 해결)

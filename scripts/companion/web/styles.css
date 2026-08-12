@@ -5,6 +5,7 @@ button, textarea, input, select { font: inherit; }
 button { min-height: 36px; padding: 0 13px; border: 1px solid #cad2df; border-radius: 8px; background: white; cursor: pointer; }
 button:hover { border-color: #5578e7; }
 button.primary, .filters button.is-active { border-color: #315bd6; background: #315bd6; color: white; }
+button.danger { border-color: #dc6363; color: #a72020; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 h1, h2, h3, p { margin: 0; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 20px 28px; background: #172033; color: white; }
@@ -17,6 +18,13 @@ h1, h2, h3, p { margin: 0; }
 .muted { color: #69758a; }
 #summary { margin: 14px 0 8px; }
 .item-list { display: grid; gap: 7px; }
+.video-group { display: grid; gap: 7px; margin-bottom: 14px; }
+.video-group-header { position: relative; display: grid; grid-template-columns: 72px 32px 1fr; align-items: center; gap: 7px; min-height: 50px; }
+.video-group-header div { display: grid; min-width: 0; }
+.video-group-header strong, .video-group-header span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.video-group-header span { color: #69758a; font-size: 12px; }
+.video-thumbnail { width: 72px; height: 42px; border-radius: 6px; object-fit: cover; }
+.channel-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
 .item-button { display: grid; gap: 3px; width: 100%; height: auto; padding: 10px; text-align: left; }
 .item-button span { color: #69758a; font-size: 12px; }
 .item-button.is-selected { border-color: #315bd6; background: #eef2ff; }

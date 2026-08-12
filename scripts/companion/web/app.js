@@ -42,17 +42,40 @@ function renderList() {
   list.innerHTML = "";
   const filtered = state.items.filter(matchesFilter);
   summary.textContent = `${filtered.length} of ${state.items.length} items`;
+  const groups = new Map();
   for (const item of filtered) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `item-button${state.selected?.loopId === item.loopId ? " is-selected" : ""}`;
-    const label = document.createElement("strong");
-    label.textContent = item.label || "Untitled loop";
-    const meta = document.createElement("span");
-    meta.textContent = `${item.processingStatus} · ${item.reviewStatus} · ${formatRange(item.start, item.end)}`;
-    button.append(label, meta);
-    button.addEventListener("click", () => selectItem(item.videoId, item.loopId));
-    list.append(button);
+    const group = groups.get(item.videoId) || [];
+    group.push(item);
+    groups.set(item.videoId, group);
+  }
+  for (const [videoId, items] of groups) {
+    const group = document.createElement("section");
+    group.className = "video-group";
+    const header = document.createElement("div");
+    header.className = "video-group-header";
+    const thumbnail = localImage(`/media/${videoId}/thumbnail.jpg`, "video-thumbnail");
+    const avatar = localImage(`/media/${videoId}/channel.jpg`, "channel-avatar");
+    const info = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = items[0].sourceTitle || videoId;
+    const channel = document.createElement("span");
+    channel.textContent = items[0].channelTitle || "Unknown channel";
+    info.append(title, channel);
+    header.append(thumbnail, avatar, info);
+    group.append(header);
+    for (const item of items) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `item-button${state.selected?.loopId === item.loopId ? " is-selected" : ""}`;
+      const label = document.createElement("strong");
+      label.textContent = item.label || "Untitled loop";
+      const meta = document.createElement("span");
+      meta.textContent = `${item.processingStatus} · ${item.reviewStatus} · ${formatRange(item.start, item.end)}`;
+      button.append(label, meta);
+      button.addEventListener("click", () => selectItem(item.videoId, item.loopId));
+      group.append(button);
+    }
+    list.append(group);
   }
 }
 
@@ -83,8 +106,7 @@ function renderWorkspace(item) {
   const answer = role(root, "answer");
   const transcript = role(root, "transcript");
   transcript.value = item.transcript || item.transcriptDraft || "";
-  role(root, "difficulty").value = item.difficulty || "";
-  role(root, "alternatives").value = (item.alternatives || []).join("\n");
+  role(root, "meaning").value = item.meaning || "";
   role(root, "notes").value = item.notes || "";
   role(root, "tags").value = (item.tags || []).join(", ");
 
@@ -98,6 +120,20 @@ function renderWorkspace(item) {
   action(root, "reveal", () => showFeedback(root, answer.value, transcript.value, true));
   action(root, "save", () => saveReview(root, item, false));
   action(root, "ready", () => saveReview(root, item, true));
+  const discardButton = root.querySelector('[data-action="discard"]');
+  discardButton.disabled = Boolean(item.anki?.noteId);
+  discardButton.title = item.anki?.noteId ? "Cards already added to Anki cannot be discarded here." : "";
+  discardButton.addEventListener("click", async () => {
+    if (!window.confirm("Discard this easy item? It will not be imported again.")) return;
+    try {
+      await api(`/api/items/${item.videoId}/${item.loopId}`, { method: "DELETE" });
+      state.selected = null;
+      workspace.innerHTML = '<div class="empty-state">Item discarded.</div>';
+      await loadItems();
+    } catch (error) {
+      showMessage(root, error.message, true);
+    }
+  });
   const ankiButton = root.querySelector('[data-action="anki"]');
   ankiButton.disabled = item.processing.status !== "complete" || item.review.status !== "ready";
   ankiButton.textContent = item.anki?.noteId ? "Update Anki card" : "Add to Anki";
@@ -129,8 +165,7 @@ async function saveReview(root, item, ready) {
       method: "PATCH",
       body: JSON.stringify({
         transcript: role(root, "transcript").value,
-        difficulty: role(root, "difficulty").value || null,
-        alternatives: lines(role(root, "alternatives").value),
+        meaning: role(root, "meaning").value,
         notes: role(root, "notes").value,
         tags: role(root, "tags").value.split(",").map((value) => value.trim()).filter(Boolean),
         reviewStatus: ready ? "ready" : "needs_review"
@@ -182,7 +217,7 @@ async function api(path, init = {}) {
 function role(root, name) { return root.querySelector(`[data-role="${name}"]`); }
 function action(root, name, handler) { root.querySelector(`[data-action="${name}"]`).addEventListener("click", handler); }
 function setText(root, name, value) { role(root, name).textContent = value; }
-function lines(value) { return [...new Set(value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))]; }
 function showMessage(root, text, error = false) { const el = role(root, "message"); el.textContent = text; el.classList.toggle("is-error", error); }
 function formatRange(start, end) { return `${formatTime(start)}–${formatTime(end)}`; }
 function formatTime(value) { const minutes = Math.floor(value / 60); const seconds = value - minutes * 60; return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`; }
+function localImage(src, className) { const img = document.createElement("img"); img.src = src; img.alt = ""; img.className = className; img.addEventListener("error", () => img.remove()); return img; }

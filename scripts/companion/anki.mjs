@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { getItem, InputError, updateAnkiState } from "./storage.mjs";
 
 const MODEL_NAME = "PhraseLoop Dictation";
-const MODEL_FIELDS = ["LoopId", "Audio", "Transcript", "Notes", "SourceTitle", "SourceUrl", "Start", "End"];
+const MODEL_FIELDS = ["LoopId", "Audio", "Transcript", "Meaning", "Notes", "Thumbnail", "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"];
 
 export async function syncItemToAnki(dataDir, videoId, loopId, config, options = {}) {
   const item = await getItem(dataDir, videoId, loopId);
@@ -32,7 +32,8 @@ export async function syncItemToAnki(dataDir, videoId, loopId, config, options =
 
   const filename = `phraseloop_${loopId}.mp3`;
   await invoke("storeMediaFile", { filename, data: audio.toString("base64") });
-  const fields = noteFields(item, filename);
+  const thumbnailFilename = await storeThumbnail(invoke, dataDir, videoId);
+  const fields = noteFields(item, filename, thumbnailFilename);
   const tags = buildTags(item);
   let noteId = await findExistingNote(invoke, item);
   let created = false;
@@ -92,7 +93,7 @@ async function ensureModel(invoke) {
   }
   const fields = await invoke("modelFieldNames", { modelName: MODEL_NAME });
   if (JSON.stringify(fields) !== JSON.stringify(MODEL_FIELDS)) {
-    throw new Error(`Anki note type '${MODEL_NAME}' has incompatible fields.`);
+    throw new Error(`Delete the development note type '${MODEL_NAME}' in Anki, then try again.`);
   }
 }
 
@@ -105,14 +106,17 @@ async function findExistingNote(invoke, item) {
   return Number.isFinite(matches?.[0]) ? matches[0] : null;
 }
 
-function noteFields(item, filename) {
+function noteFields(item, filename, thumbnailFilename) {
   return {
     LoopId: item.loopId,
     Audio: `[sound:${filename}]`,
     Transcript: item.transcript.trim(),
+    Meaning: item.meaning ?? "",
     Notes: item.notes ?? "",
+    Thumbnail: thumbnailFilename ? `<img src="${thumbnailFilename}">` : "",
     SourceTitle: item.sourceTitle ?? "",
-    SourceUrl: item.sourceUrl ?? "",
+    ChannelTitle: item.channelTitle ?? "",
+    SourceUrl: sourceUrlAtTime(item.sourceUrl, item.start),
     Start: Number(item.start).toFixed(3),
     End: Number(item.end).toFixed(3)
   };
@@ -120,7 +124,6 @@ function noteFields(item, filename) {
 
 function buildTags(item) {
   const tags = new Set(["phraseloop", ...(item.tags ?? []).map(safeTag).filter(Boolean)]);
-  if (item.difficulty) tags.add(`phraseloop::${item.difficulty}`);
   return [...tags];
 }
 
@@ -133,9 +136,11 @@ function calculateContentHash(item, audio) {
   hash.update(audio);
   hash.update(JSON.stringify({
     transcript: item.transcript,
+    meaning: item.meaning,
     notes: item.notes,
     tags: item.tags,
-    difficulty: item.difficulty,
+    sourceTitle: item.sourceTitle,
+    channelTitle: item.channelTitle,
     sourceUrl: item.sourceUrl,
     start: item.start,
     end: item.end
@@ -144,13 +149,33 @@ function calculateContentHash(item, audio) {
 }
 
 function frontTemplate() {
-  return "{{Audio}}<div class=prompt>Type what you hear</div><div class=dictation-input>{{type:Transcript}}</div>";
+  return "{{Audio}}";
 }
 
 function backTemplate() {
-  return "{{FrontSide}}<hr id=answer><div class=transcript>{{Transcript}}</div><div class=notes>{{Notes}}</div><a href=\"{{SourceUrl}}\">YouTube source</a>";
+  return "{{FrontSide}}<hr id=answer><div class=transcript>{{Transcript}}</div>{{#Meaning}}<div class=meaning>{{Meaning}}</div>{{/Meaning}}<div class=notes>{{Notes}}</div><a href=\"{{SourceUrl}}\">{{Thumbnail}}</a><div class=source-title>{{SourceTitle}}</div><div class=channel-title>{{ChannelTitle}}</div>";
 }
 
 function modelCss() {
-  return ".card{font-family:Arial;font-size:20px;text-align:center;color:#172033;background:#fff}.prompt{margin:16px;color:#69758a}.transcript{margin:18px;font-size:24px}.notes{margin:12px;color:#526078}#typeans{font-size:22px!important}";
+  return ".card{font-family:Arial;font-size:20px;text-align:center;color:#172033;background:#fff}.transcript{margin:18px;font-size:24px}.meaning{margin:12px;color:#315bd6}.notes,.source-title,.channel-title{margin:10px;color:#526078}.channel-title{font-size:14px}.card img{display:block;max-width:480px;width:100%;margin:16px auto;border-radius:10px}";
+}
+
+async function storeThumbnail(invoke, dataDir, videoId) {
+  const path = join(dataDir, "videos", videoId, "thumbnail.jpg");
+  try {
+    const bytes = await readFile(path);
+    const filename = `phraseloop_thumb_${videoId}.jpg`;
+    await invoke("storeMediaFile", { filename, data: bytes.toString("base64") });
+    return filename;
+  } catch (error) {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  }
+}
+
+function sourceUrlAtTime(value, start) {
+  if (!value) return "";
+  const url = new URL(value);
+  url.searchParams.set("t", `${Math.floor(start)}s`);
+  return url.toString();
 }

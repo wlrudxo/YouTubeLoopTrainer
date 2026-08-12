@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -8,6 +8,9 @@ const mutationQueues = new Map();
 export async function initializeDataRoot(dataDir, requestedPort = 17311) {
   await mkdir(join(dataDir, "videos"), { recursive: true });
   await mkdir(join(dataDir, "tmp"), { recursive: true });
+  if (!(await readJsonIfExists(join(dataDir, "discarded.json")))) {
+    await atomicWriteJson(join(dataDir, "discarded.json"), { schemaVersion: 1, updatedAt: null, items: {} });
+  }
 
   const configPath = join(dataDir, "config.json");
   let config = await readJsonIfExists(configPath);
@@ -63,7 +66,8 @@ export function validateImportPayload(value) {
     label: optionalString(value.label, "label", 1000),
     sourceTitle: optionalString(value.title ?? value.sourceTitle, "title", 1000),
     sourceUrl: requiredHttpUrl(value.url ?? value.sourceUrl, "url"),
-    channelTitle: optionalString(value.channelTitle, "channelTitle", 500)
+    channelTitle: optionalString(value.channelTitle, "channelTitle", 500),
+    channelAvatarUrl: optionalAssetUrl(value.channelAvatarUrl, "channelAvatarUrl")
   };
 }
 
@@ -80,11 +84,20 @@ export function calculateCaptureHash(capture) {
 export async function importCapture(dataDir, rawCapture, now = new Date().toISOString()) {
   const capture = validateImportPayload(rawCapture);
   return enqueueMutation(dataDir, async () => {
+    const captureHash = calculateCaptureHash(capture);
+    const discarded = await readDiscarded(dataDir);
+    if (discarded.items[capture.loopId]) {
+      return {
+        item: { loopId: capture.loopId, videoId: capture.videoId, captureHash, processing: { status: "discarded" } },
+        changed: false,
+        created: false,
+        discarded: true
+      };
+    }
     const loopDir = getLoopDir(dataDir, capture.videoId, capture.loopId);
     const itemPath = join(loopDir, "item.json");
     const sourcePath = join(dataDir, "videos", capture.videoId, "source.json");
     const previous = await readJsonIfExists(itemPath);
-    const captureHash = calculateCaptureHash(capture);
     const changed = previous?.captureHash !== captureHash;
 
     await mkdir(loopDir, { recursive: true });
@@ -92,6 +105,7 @@ export async function importCapture(dataDir, rawCapture, now = new Date().toISOS
       videoId: capture.videoId,
       title: capture.sourceTitle,
       channelTitle: capture.channelTitle,
+      channelAvatarUrl: capture.channelAvatarUrl,
       url: capture.sourceUrl,
       updatedAt: now
     });
@@ -106,25 +120,44 @@ export async function importCapture(dataDir, rawCapture, now = new Date().toISOS
       captureHash,
       transcript: previous?.transcript ?? "",
       transcriptDraft: changed ? capture.label : previous?.transcriptDraft ?? capture.label,
-      alternatives: Array.isArray(previous?.alternatives) ? previous.alternatives : [],
+      meaning: previous?.meaning ?? "",
       notes: previous?.notes ?? "",
       tags: Array.isArray(previous?.tags) ? previous.tags : [],
       sourceTitle: capture.sourceTitle,
       sourceUrl: capture.sourceUrl,
+      channelTitle: capture.channelTitle,
+      channelAvatarUrl: capture.channelAvatarUrl,
       processing: changed
         ? { status: "queued", error: null, attempts: previous?.processing?.attempts ?? 0 }
         : previous?.processing ?? { status: "queued", error: null, attempts: 0 },
       review: changed
         ? { status: "needs_review", verifiedAt: null }
         : previous?.review ?? { status: "needs_review", verifiedAt: null },
-      anki: normalizeAnkiState(previous?.anki, changed),
+      anki: normalizeAnkiState(previous?.anki, changed || hasSourceMetadataChange(previous, capture)),
       createdAt: previous?.createdAt ?? now,
       updatedAt: now
     };
 
     await atomicWriteJson(itemPath, item);
     await rebuildLibrary(dataDir);
-    return { item, changed, created: !previous };
+    return { item, changed, created: !previous, discarded: false };
+  });
+}
+
+export async function discardItem(dataDir, videoId, loopId, now = new Date().toISOString()) {
+  requiredSafeId(videoId, "videoId");
+  requiredSafeId(loopId, "loopId");
+  return enqueueMutation(dataDir, async () => {
+    const item = await readJsonIfExists(join(getLoopDir(dataDir, videoId, loopId), "item.json"));
+    if (!item) return null;
+    if (item.anki?.noteId) throw new InputError("An item already synced to Anki cannot be discarded.");
+    const discarded = await readDiscarded(dataDir);
+    discarded.items[loopId] = { loopId, videoId, captureHash: item.captureHash, discardedAt: now };
+    discarded.updatedAt = now;
+    await atomicWriteJson(join(dataDir, "discarded.json"), discarded);
+    await rm(getLoopDir(dataDir, videoId, loopId), { recursive: true, force: true });
+    await rebuildLibrary(dataDir);
+    return discarded.items[loopId];
   });
 }
 
@@ -150,8 +183,26 @@ export async function patchItem(dataDir, videoId, loopId, rawPatch, now = new Da
     if (!previous) return null;
 
     const item = {
-      ...previous,
-      ...patch.fields,
+      schemaVersion: 1,
+      loopId: previous.loopId,
+      videoId: previous.videoId,
+      start: previous.start,
+      end: previous.end,
+      label: previous.label,
+      captureHash: previous.captureHash,
+      transcript: patch.fields.transcript ?? previous.transcript ?? "",
+      transcriptDraft: previous.transcriptDraft ?? "",
+      meaning: patch.fields.meaning ?? previous.meaning ?? "",
+      notes: patch.fields.notes ?? previous.notes ?? "",
+      tags: patch.fields.tags ?? previous.tags ?? [],
+      sourceTitle: previous.sourceTitle ?? "",
+      sourceUrl: previous.sourceUrl ?? "",
+      channelTitle: previous.channelTitle ?? "",
+      channelAvatarUrl: previous.channelAvatarUrl ?? "",
+      processing: previous.processing,
+      review: previous.review,
+      anki: previous.anki,
+      createdAt: previous.createdAt,
       updatedAt: now
     };
 
@@ -253,6 +304,7 @@ function toLibraryItem(item) {
     videoId: item.videoId,
     label: item.label,
     sourceTitle: item.sourceTitle,
+    channelTitle: item.channelTitle ?? "",
     start: item.start,
     end: item.end,
     captureHash: item.captureHash,
@@ -298,22 +350,16 @@ function enqueueMutation(key, operation) {
 
 function validateItemPatch(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new InputError("Patch body must be an object.");
-  const allowed = new Set(["transcript", "alternatives", "difficulty", "notes", "tags", "reviewStatus"]);
+  const allowed = new Set(["transcript", "meaning", "notes", "tags", "reviewStatus"]);
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) throw new InputError(`${key} cannot be updated.`);
   }
 
   const fields = {};
   if ("transcript" in value) fields.transcript = optionalString(value.transcript, "transcript", 10_000);
+  if ("meaning" in value) fields.meaning = optionalString(value.meaning, "meaning", 20_000);
   if ("notes" in value) fields.notes = optionalString(value.notes, "notes", 20_000);
-  if ("alternatives" in value) fields.alternatives = stringArray(value.alternatives, "alternatives", 20, 10_000);
   if ("tags" in value) fields.tags = stringArray(value.tags, "tags", 50, 200);
-  if ("difficulty" in value) {
-    if (value.difficulty !== null && !["easy", "normal", "hard"].includes(value.difficulty)) {
-      throw new InputError("difficulty must be easy, normal, hard, or null.");
-    }
-    fields.difficulty = value.difficulty;
-  }
   if ("reviewStatus" in value && !["needs_review", "ready"].includes(value.reviewStatus)) {
     throw new InputError("reviewStatus must be needs_review or ready.");
   }
@@ -328,8 +374,19 @@ function stringArray(value, field, maxItems, maxItemLength) {
 }
 
 function hasAnkiContentChange(previous, item) {
-  return ["transcript", "notes", "difficulty"].some((field) => previous[field] !== item[field]) ||
+  return ["transcript", "meaning", "notes"].some((field) => previous[field] !== item[field]) ||
     JSON.stringify(previous.tags ?? []) !== JSON.stringify(item.tags ?? []);
+}
+
+function hasSourceMetadataChange(previous, capture) {
+  if (!previous) return false;
+  return previous.sourceTitle !== capture.sourceTitle ||
+    previous.sourceUrl !== capture.sourceUrl ||
+    previous.channelTitle !== capture.channelTitle;
+}
+
+async function readDiscarded(dataDir) {
+  return (await readJsonIfExists(join(dataDir, "discarded.json"))) ?? { schemaVersion: 1, updatedAt: null, items: {} };
 }
 
 function validateConfig(config) {
@@ -363,6 +420,13 @@ function requiredHttpUrl(value, field) {
     throw new InputError(`${field} is invalid.`);
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new InputError(`${field} must use http or https.`);
+  return parsed.toString();
+}
+
+function optionalAssetUrl(value, field) {
+  if (value == null || value === "") return "";
+  const parsed = new URL(requiredHttpUrl(value, field));
+  if (parsed.protocol !== "https:") throw new InputError(`${field} must use https.`);
   return parsed.toString();
 }
 

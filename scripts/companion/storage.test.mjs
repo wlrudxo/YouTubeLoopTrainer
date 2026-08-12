@@ -9,6 +9,7 @@ import {
   importCapture,
   initializeDataRoot,
   patchItem,
+  discardItem,
   validateImportPayload
 } from "./storage.mjs";
 
@@ -59,11 +60,11 @@ describe("companion storage", () => {
       dataDir,
       "video_123",
       "lp_test",
-      { transcript: "Where is Jane?", difficulty: "normal", tags: ["conversation"], reviewStatus: "ready" },
+      { transcript: "Where is Jane?", meaning: "제인은 어디 있나요?", tags: ["conversation"], reviewStatus: "ready" },
       "2026-08-12T01:00:00.000Z"
     );
     expect(ready.review).toEqual({ status: "ready", verifiedAt: "2026-08-12T01:00:00.000Z" });
-    expect(ready.difficulty).toBe("normal");
+    expect(ready.meaning).toBe("제인은 어디 있나요?");
   });
 
   it("rejects patch fields outside the allowlist", async () => {
@@ -115,5 +116,18 @@ describe("companion storage", () => {
     const first = validateImportPayload(capture({ start: 12.3001 }));
     const second = validateImportPayload(capture({ start: 12.3002 }));
     expect(calculateCaptureHash(first)).toBe(calculateCaptureHash(second));
+  });
+
+  it("keeps a discarded loop tombstoned when it is imported again", async () => {
+    const dataDir = await makeDataDir();
+    await initializeDataRoot(dataDir);
+    const first = await importCapture(dataDir, capture());
+    const discarded = await discardItem(dataDir, "video_123", "lp_test", "2026-08-12T02:00:00.000Z");
+    const repeated = await importCapture(dataDir, capture());
+
+    expect(discarded.captureHash).toBe(first.item.captureHash);
+    expect(repeated.discarded).toBe(true);
+    expect(repeated.item.captureHash).toBe(first.item.captureHash);
+    expect(await getItem(dataDir, "video_123", "lp_test")).toBeNull();
   });
 });
