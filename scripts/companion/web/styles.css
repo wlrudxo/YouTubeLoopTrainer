@@ -45,4 +45,6 @@ label { display: grid; gap: 5px; font-weight: 600; }
 .word-missed { color: #c73535; }
 .message { min-height: 24px; margin-top: 12px; color: #14804a; }
 .message.is-error { color: #c73535; }
+.maintenance-row { display: flex; justify-content: flex-end; margin-top: 28px; padding-top: 14px; border-top: 1px solid #dce2ec; }
+.maintenance-row button { color: #69758a; font-size: 13px; }
 @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid #dce2ec; } .workspace { padding: 18px; } }
