@@ -15,7 +15,11 @@ afterEach(async () => {
 async function startTestServer() {
   const dataDir = await mkdtemp(join(tmpdir(), "phraseloop-server-"));
   tempDirs.push(dataDir);
-  const companion = await createCompanionServer({ dataDir, port: 17311 });
+  const companion = await createCompanionServer({
+    dataDir,
+    port: 17311,
+    enqueueMediaProcessing: async () => undefined
+  });
   await new Promise((resolve, reject) => {
     companion.server.once("error", reject);
     companion.server.listen(0, "127.0.0.1", resolve);

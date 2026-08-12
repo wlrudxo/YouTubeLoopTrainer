@@ -161,6 +161,29 @@ export async function patchItem(dataDir, videoId, loopId, rawPatch, now = new Da
   });
 }
 
+export async function updateProcessing(dataDir, videoId, loopId, processing, now = new Date().toISOString()) {
+  requiredSafeId(videoId, "videoId");
+  requiredSafeId(loopId, "loopId");
+  if (!processing || !["queued", "processing", "complete", "error"].includes(processing.status)) {
+    throw new InputError("Invalid processing status.");
+  }
+
+  return enqueueMutation(dataDir, async () => {
+    const itemPath = join(getLoopDir(dataDir, videoId, loopId), "item.json");
+    const item = await readJsonIfExists(itemPath);
+    if (!item) return null;
+    item.processing = {
+      status: processing.status,
+      error: processing.error ?? null,
+      attempts: processing.attempts ?? item.processing?.attempts ?? 0
+    };
+    item.updatedAt = now;
+    await atomicWriteJson(itemPath, item);
+    await rebuildLibrary(dataDir);
+    return item;
+  });
+}
+
 export async function rebuildLibrary(dataDir) {
   const items = [];
   const videosDir = join(dataDir, "videos");

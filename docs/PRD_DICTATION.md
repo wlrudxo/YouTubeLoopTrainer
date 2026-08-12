@@ -117,6 +117,7 @@ PhraseLoopData/
 | `GET /api/items` | 아이템 목록 (상태 필터) |
 | `GET /api/items/:videoId/:loopId` | 아이템 조회 |
 | `PATCH /api/items/:videoId/:loopId` | transcript·alternatives·difficulty·notes·tags·review 상태 수정(allowlist) |
+| `POST /api/items/:videoId/:loopId/process` | MP3 생성 또는 실패 작업 재시도 |
 | `POST /api/items/:videoId/:loopId/anki` | Anki에 추가 또는 업데이트 |
 | `GET /media/...` | mp3 서빙 |
 | `GET /` | Dictation 웹앱 |

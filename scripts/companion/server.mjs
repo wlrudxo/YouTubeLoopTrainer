@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getItem, importCapture, initializeDataRoot, InputError, listItems, patchItem } from "./storage.mjs";
+import { enqueueMediaProcessing } from "./media.mjs";
 
 const MAX_BODY_BYTES = 128 * 1024;
 
@@ -10,6 +11,7 @@ export async function createCompanionServer(options = {}) {
   const dataDir = resolve(options.dataDir ?? resolveDataDir(process.argv.slice(2)));
   const initialized = await initializeDataRoot(dataDir, options.port ?? 17311);
   const config = initialized.config;
+  const enqueueMedia = options.enqueueMediaProcessing ?? enqueueMediaProcessing;
 
   const server = createServer(async (request, response) => {
     try {
@@ -34,6 +36,11 @@ export async function createCompanionServer(options = {}) {
 
       if (request.method === "POST" && url.pathname === "/import") {
         const result = await importCapture(dataDir, await readJsonBody(request));
+        if (result.changed || result.item.processing?.status === "error") {
+          void enqueueMedia(dataDir, result.item.videoId, result.item.loopId).catch((error) => {
+            console.error(`Media processing failed for ${result.item.loopId}:`, error.message);
+          });
+        }
         sendJson(response, result.created ? 201 : 200, {
           loopId: result.item.loopId,
           videoId: result.item.videoId,
@@ -57,6 +64,20 @@ export async function createCompanionServer(options = {}) {
           return;
         }
         sendJson(response, 200, item);
+        return;
+      }
+
+      const processMatch = /^\/api\/items\/([A-Za-z0-9_-]{1,128})\/([A-Za-z0-9_-]{1,128})\/process$/.exec(url.pathname);
+      if (request.method === "POST" && processMatch) {
+        const item = await getItem(dataDir, processMatch[1], processMatch[2]);
+        if (!item) {
+          sendJson(response, 404, { error: "Item not found." });
+          return;
+        }
+        void enqueueMedia(dataDir, processMatch[1], processMatch[2]).catch((error) => {
+          console.error(`Media processing failed for ${processMatch[2]}:`, error.message);
+        });
+        sendJson(response, 202, { processing: "queued" });
         return;
       }
       if (request.method === "PATCH" && itemMatch) {
