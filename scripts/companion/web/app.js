@@ -102,7 +102,6 @@ function renderWorkspace(item) {
 
   const audio = role(root, "audio");
   audio.src = `/media/${item.videoId}/${item.loopId}/audio.mp3`;
-  if (item.processing.status === "complete") void audio.play().catch(() => undefined);
   const answer = role(root, "answer");
   const transcript = role(root, "transcript");
   transcript.value = item.transcript || item.transcriptDraft || "";
