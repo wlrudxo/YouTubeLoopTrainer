@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getItem, InputError, updateAnkiState } from "./storage.mjs";
+import { getItem, InputError, patchItem, updateAnkiState } from "./storage.mjs";
 
 const MODEL_NAME = "PhraseLoop Dictation";
 const MODEL_FIELDS = ["LoopId", "Audio", "Transcript", "Meaning", "Notes", "Thumbnail", "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"];
@@ -10,9 +10,7 @@ export async function syncItemToAnki(dataDir, videoId, loopId, config, options =
   const item = await getItem(dataDir, videoId, loopId);
   if (!item) throw new InputError("Item not found.");
   if (item.processing?.status !== "complete") throw new InputError("MP3 processing must be complete before adding to Anki.");
-  if (item.review?.status !== "ready" || !item.review.verifiedAt || !item.transcript?.trim()) {
-    throw new InputError("The transcript must be reviewed before adding to Anki.");
-  }
+  if (!item.transcript?.trim()) throw new InputError("Save a non-empty transcript before adding to Anki.");
 
   const audioPath = join(dataDir, "videos", videoId, "loops", loopId, "audio.mp3");
   let audio;
@@ -51,6 +49,9 @@ export async function syncItemToAnki(dataDir, videoId, loopId, config, options =
 
   const now = new Date().toISOString();
   const contentHash = calculateContentHash(item, audio);
+  if (item.review?.status !== "ready") {
+    await patchItem(dataDir, videoId, loopId, { reviewStatus: "ready" }, now);
+  }
   const updated = await updateAnkiState(dataDir, videoId, loopId, {
     status: "synced",
     deckName,

@@ -8,20 +8,15 @@
     <script type="module" src="/app.js"></script>
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <h1>PhraseLoop Dictation</h1>
-        <p>Listen, type, correct, then send verified sentences to Anki.</p>
-      </div>
-      <button id="refreshButton" type="button">Refresh</button>
-    </header>
-
     <main class="layout">
       <aside class="sidebar">
+        <div class="sidebar-head">
+          <strong>PhraseLoop Dictation</strong>
+          <button id="refreshButton" type="button" title="Reload items">Refresh</button>
+        </div>
         <div class="filters" role="group" aria-label="Item status">
           <button type="button" data-filter="all" class="is-active">All</button>
           <button type="button" data-filter="needs_review">Needs review</button>
-          <button type="button" data-filter="ready">Ready</button>
           <button type="button" data-filter="synced">In Anki</button>
         </div>
         <p id="summary" class="muted"></p>
@@ -35,25 +30,21 @@
 
     <template id="workspaceTemplate">
       <article>
-        <div class="title-row">
-          <div>
-            <p class="eyebrow" data-role="source"></p>
+        <header class="title-block">
+          <img data-role="thumb" class="title-thumbnail" alt="" />
+          <div class="title-text">
+            <p class="eyebrow"><img data-role="avatar" class="channel-avatar" alt="" /><span data-role="source"></span> <span class="status-badge" data-role="status"></span></p>
             <h2 data-role="title"></h2>
           </div>
-          <span class="status-badge" data-role="status"></span>
-        </div>
+        </header>
 
-        <section class="card audio-card">
-          <audio data-role="audio" controls preload="metadata"></audio>
-          <div class="button-row">
+        <section class="card dictation-card">
+          <div class="audio-row">
+            <audio data-role="audio" controls preload="metadata"></audio>
             <button type="button" data-action="replay">Replay (Ctrl)</button>
           </div>
-          <p class="muted" data-role="processing"></p>
-        </section>
-
-        <section class="card">
-          <h3>Dictation</h3>
-          <textarea data-role="answer" rows="4" placeholder="Type what you hear..."></textarea>
+          <p class="muted processing-note" data-role="processing"></p>
+          <textarea data-role="answer" rows="2" placeholder="Type what you hear... (Enter to check)"></textarea>
           <div class="button-row">
             <button type="button" data-action="check" class="primary">Check</button>
             <button type="button" data-action="reveal">Show answer</button>
@@ -62,17 +53,18 @@
         </section>
 
         <section class="card review-card">
-          <h3>Manual review</h3>
-          <label>Transcript<textarea data-role="transcript" rows="4"></textarea></label>
-          <label>Meaning<textarea data-role="meaning" rows="3" placeholder="Optional translation or meaning"></textarea></label>
-          <label>Notes<textarea data-role="notes" rows="3"></textarea></label>
+          <label>Transcript<textarea data-role="transcript" rows="2"></textarea></label>
+          <div class="field-pair">
+            <label>Meaning<textarea data-role="meaning" rows="2" placeholder="Optional translation or meaning"></textarea></label>
+            <label>Notes<textarea data-role="notes" rows="2"></textarea></label>
+          </div>
           <label>Tags<input data-role="tags" type="text" placeholder="conversation, pronunciation" /></label>
-          <div class="button-row">
+          <div class="button-row review-actions">
+            <button type="button" data-action="anki" class="primary">Add to Anki</button>
             <button type="button" data-action="save">Save draft</button>
-            <button type="button" data-action="retry">Retry MP3</button>
-            <button type="button" data-action="ready" class="primary">Mark reviewed</button>
+            <span class="spacer"></span>
+            <button type="button" data-action="retry" class="subtle">Retry MP3</button>
             <button type="button" data-action="discard" class="danger">Discard</button>
-            <button type="button" data-action="anki">Add to Anki</button>
           </div>
         </section>
         <p data-role="message" class="message" aria-live="polite"></p>

@@ -150,7 +150,6 @@ export async function discardItem(dataDir, videoId, loopId, now = new Date().toI
   return enqueueMutation(dataDir, async () => {
     const item = await readJsonIfExists(join(getLoopDir(dataDir, videoId, loopId), "item.json"));
     if (!item) return null;
-    if (item.anki?.noteId) throw new InputError("An item already synced to Anki cannot be discarded.");
     const discarded = await readDiscarded(dataDir);
     discarded.items[loopId] = { loopId, videoId, captureHash: item.captureHash, discardedAt: now };
     discarded.updatedAt = now;

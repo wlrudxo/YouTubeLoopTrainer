@@ -82,7 +82,7 @@ function renderList() {
 function matchesFilter(item) {
   if (state.filter === "all") return true;
   if (state.filter === "synced") return item.ankiStatus === "synced";
-  return item.reviewStatus === state.filter;
+  return item.ankiStatus !== "synced";
 }
 
 async function selectItem(videoId, loopId) {
@@ -95,7 +95,16 @@ async function selectItem(videoId, loopId) {
 function renderWorkspace(item) {
   const fragment = template.content.cloneNode(true);
   const root = fragment.querySelector("article");
-  setText(root, "source", `${item.sourceTitle || item.videoId} · ${formatRange(item.start, item.end)}`);
+  const listItem = state.items.find((entry) => entry.loopId === item.loopId);
+  const channelTitle = item.channelTitle || listItem?.channelTitle;
+  const sourceParts = [channelTitle, item.sourceTitle || item.videoId, formatRange(item.start, item.end)].filter(Boolean);
+  setText(root, "source", sourceParts.join(" · "));
+  const thumb = role(root, "thumb");
+  thumb.src = `/media/${item.videoId}/thumbnail.jpg`;
+  thumb.addEventListener("error", () => thumb.remove());
+  const avatar = role(root, "avatar");
+  avatar.src = `/media/${item.videoId}/channel.jpg`;
+  avatar.addEventListener("error", () => avatar.remove());
   setText(root, "title", item.label || item.transcriptDraft || "Untitled loop");
   setText(root, "status", `${item.processing.status} / ${item.review.status}`);
   setText(root, "processing", item.processing.error || "");
@@ -117,13 +126,21 @@ function renderWorkspace(item) {
   });
   action(root, "check", () => showFeedback(root, answer.value, transcript.value, false));
   action(root, "reveal", () => showFeedback(root, answer.value, transcript.value, true));
-  action(root, "save", () => saveReview(root, item, false));
-  action(root, "ready", () => saveReview(root, item, true));
+  action(root, "save", async () => {
+    try {
+      await saveFields(root, item);
+      showMessage(root, "Draft saved.");
+      window.setTimeout(loadItems, 1200);
+    } catch (error) {
+      showMessage(root, error.message, true);
+    }
+  });
   const discardButton = root.querySelector('[data-action="discard"]');
-  discardButton.disabled = Boolean(item.anki?.noteId);
-  discardButton.title = item.anki?.noteId ? "Cards already added to Anki cannot be discarded here." : "";
   discardButton.addEventListener("click", async () => {
-    if (!window.confirm("Discard this easy item? It will not be imported again.")) return;
+    const prompt = item.anki?.noteId
+      ? "Remove this item from the local app? The Anki card is kept. It will not be imported again."
+      : "Discard this easy item? It will not be imported again.";
+    if (!window.confirm(prompt)) return;
     try {
       await api(`/api/items/${item.videoId}/${item.loopId}`, { method: "DELETE" });
       state.selected = null;
@@ -134,11 +151,12 @@ function renderWorkspace(item) {
     }
   });
   const ankiButton = root.querySelector('[data-action="anki"]');
-  ankiButton.disabled = item.processing.status !== "complete" || item.review.status !== "ready";
+  ankiButton.disabled = item.processing.status !== "complete";
   ankiButton.textContent = item.anki?.noteId ? "Update Anki card" : "Add to Anki";
   ankiButton.addEventListener("click", async () => {
     try {
       ankiButton.disabled = true;
+      await saveFields(root, item);
       const result = await api(`/api/items/${item.videoId}/${item.loopId}/anki`, { method: "POST" });
       showMessage(root, result.created ? `Added to Anki (note ${result.noteId}).` : `Updated Anki note ${result.noteId}.`);
       window.setTimeout(loadItems, 1500);
@@ -158,24 +176,18 @@ function renderWorkspace(item) {
   workspace.append(fragment);
 }
 
-async function saveReview(root, item, ready) {
-  try {
-    const updated = await api(`/api/items/${item.videoId}/${item.loopId}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        transcript: role(root, "transcript").value,
-        meaning: role(root, "meaning").value,
-        notes: role(root, "notes").value,
-        tags: role(root, "tags").value.split(",").map((value) => value.trim()).filter(Boolean),
-        reviewStatus: ready ? "ready" : "needs_review"
-      })
-    });
-    state.selected = updated;
-    showMessage(root, ready ? "Transcript reviewed and ready for Anki." : "Draft saved.");
-    window.setTimeout(loadItems, 1200);
-  } catch (error) {
-    showMessage(root, error.message, true);
-  }
+async function saveFields(root, item) {
+  const updated = await api(`/api/items/${item.videoId}/${item.loopId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      transcript: role(root, "transcript").value,
+      meaning: role(root, "meaning").value,
+      notes: role(root, "notes").value,
+      tags: role(root, "tags").value.split(",").map((value) => value.trim()).filter(Boolean)
+    })
+  });
+  state.selected = updated;
+  return updated;
 }
 
 function showFeedback(root, typed, correct, reveal) {

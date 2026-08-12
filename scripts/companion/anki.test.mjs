@@ -101,9 +101,19 @@ describe("Anki sync", () => {
     expect(styling.params.model.css).toContain("max-width:280px");
   });
 
-  it("rejects items that have not completed review", async () => {
+  it("adds an unreviewed item and marks it ready", async () => {
     const { dataDir, config } = await readyItem();
     await patchItem(dataDir, "video_anki", "lp_anki", { reviewStatus: "needs_review" });
-    await expect(syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: fakeAnki().invoke })).rejects.toThrow(/reviewed/);
+    const result = await syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: fakeAnki().invoke });
+    expect(result).toMatchObject({ noteId: 789, created: true });
+    const item = await getItem(dataDir, "video_anki", "lp_anki");
+    expect(item.review.status).toBe("ready");
+    expect(item.anki.status).toBe("synced");
+  });
+
+  it("rejects items without a saved transcript", async () => {
+    const { dataDir, config } = await readyItem();
+    await patchItem(dataDir, "video_anki", "lp_anki", { transcript: "", reviewStatus: "needs_review" });
+    await expect(syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: fakeAnki().invoke })).rejects.toThrow(/transcript/);
   });
 });
