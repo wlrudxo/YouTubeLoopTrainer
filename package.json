@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "vite build && node scripts/build-content.mjs && node scripts/copy-manifest.mjs",
+    "companion": "node scripts/companion/server.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
