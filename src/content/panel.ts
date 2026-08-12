@@ -32,6 +32,7 @@ export type PanelActions = {
   stopLoop: () => void;
   renameLoop: (loop: Loop, label: string) => void;
   setLoopStatus: (loop: Loop, status: LoopStatus) => void;
+  importLoop: (loop: Loop) => void;
   deleteLoop: (loop: Loop) => void;
   setCollapsed: (collapsed: boolean) => void;
   setDebugExpanded: (expanded: boolean) => void;
@@ -406,7 +407,10 @@ export class PhraseLoopPanel {
     statusButton.className = `phraseloop-status-button is-${status}`;
     statusButton.setAttribute("aria-label", `Loop status: ${formatLoopStatus(status)}`);
     statusButton.addEventListener("click", () => this.actions.setLoopStatus(loop, nextLoopStatus(status)));
-    actions.append(iconRow, statusButton);
+    const importButton = button(loop.lastImportedHash ? "Sent" : "Send", `Send ${loop.label} to local dictation`);
+    importButton.className = "phraseloop-status-button";
+    importButton.addEventListener("click", () => this.actions.importLoop(loop));
+    actions.append(iconRow, statusButton, importButton);
     row.append(actions);
     return row;
   }

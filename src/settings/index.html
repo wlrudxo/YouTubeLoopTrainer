@@ -39,6 +39,23 @@
       </section>
 
       <section class="section">
+        <h2>Local Dictation Companion</h2>
+        <p>Start the companion, then copy its token from <code>PhraseLoopData/config.json</code>.</p>
+        <label class="field-label">
+          Server URL
+          <input id="companionUrl" type="url" value="http://127.0.0.1:17311" />
+        </label>
+        <label class="field-label">
+          Token
+          <input id="companionToken" type="password" autocomplete="off" />
+        </label>
+        <div class="button-row">
+          <button id="saveCompanionButton" type="button">Save &amp; Connect</button>
+          <button id="openCompanionButton" type="button">Open Dictation</button>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Export</h2>
         <button id="exportButton" type="button">Export JSON</button>
       </section>

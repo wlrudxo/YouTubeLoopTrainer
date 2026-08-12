@@ -6,8 +6,14 @@ export type Loop = {
   end: number;
   label: string;
   status?: LoopStatus;
+  lastImportedHash?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type CompanionConfig = {
+  url: string;
+  token: string;
 };
 
 export type LoopStatus = "new" | "hard" | "done";

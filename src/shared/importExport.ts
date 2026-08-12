@@ -155,6 +155,7 @@ function cloneLoop(loop: Loop): Loop {
     end: loop.end,
     label: loop.label,
     ...(loop.status ? { status: loop.status } : {}),
+    ...(loop.lastImportedHash ? { lastImportedHash: loop.lastImportedHash } : {}),
     createdAt: loop.createdAt,
     updatedAt: loop.updatedAt
   };
@@ -196,6 +197,7 @@ function isLoop(value: unknown): value is Loop {
     typeof value.end === "number" &&
     typeof value.label === "string" &&
     (!("status" in value) || value.status === undefined || isLoopStatus(value.status)) &&
+    (!("lastImportedHash" in value) || value.lastImportedHash === undefined || typeof value.lastImportedHash === "string") &&
     typeof value.createdAt === "string" &&
     typeof value.updatedAt === "string"
   );

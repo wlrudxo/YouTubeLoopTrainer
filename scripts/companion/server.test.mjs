@@ -81,4 +81,20 @@ describe("companion HTTP server", () => {
     });
     expect(response.status).toBe(403);
   });
+
+  it("pairs an authenticated Chrome extension origin", async () => {
+    const companion = await startTestServer();
+    const origin = "chrome-extension://abcdefghijklmnop";
+    const response = await fetch(`${companion.baseUrl}/pair`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${companion.config.token}`, Origin: origin, "Content-Type": "application/json" }
+    });
+    expect(response.status).toBe(200);
+    expect(companion.config.allowedOrigins).toContain(origin);
+
+    const allowed = await fetch(`${companion.baseUrl}/api/items`, {
+      headers: { Authorization: `Bearer ${companion.config.token}`, Origin: origin }
+    });
+    expect(allowed.status).toBe(200);
+  });
 });

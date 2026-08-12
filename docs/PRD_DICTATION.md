@@ -46,7 +46,7 @@ Anki 추가 API는 `processing=complete`, `review=ready`, 비어 있지 않은 t
 
 - Node.js 단일 프로세스, 프레임워크 없이 `node:http` 수준으로 가볍게. (프로젝트는 이미 Node/ESM 기반)
 - **127.0.0.1 전용 바인딩**, 기본 포트 **17311**.
-- 인증: 서버 최초 실행 시 `PhraseLoopData/config.json`에 랜덤 토큰 생성. 확장 설정 페이지에 사용자가 붙여넣는 정적 토큰 방식. 요청 헤더로 검증. CORS는 확장 origin으로 제한.
+- 인증: 서버 최초 실행 시 `PhraseLoopData/config.json`에 랜덤 토큰 생성. 확장 설정 페이지에 사용자가 붙여넣고 `Save & Connect`로 현재 확장 origin을 페어링한다. 이후 요청 헤더로 토큰을 검증하며 CORS는 페어링된 확장 origin으로 제한한다.
 - 하는 일:
   1. 확장에서 구간 정보 수신 (`POST /import`)
   2. yt-dlp/ffmpeg로 구간별 MP3 생성 (기존 `scripts/export-anki.mjs`의 섹션 다운로드 로직 재사용 가능)
@@ -113,6 +113,7 @@ PhraseLoopData/
 
 | 메서드/경로 | 역할 |
 |---|---|
+| `POST /pair` | 올바른 토큰을 제시한 Chrome 확장 origin을 CORS 허용 목록에 등록 |
 | `POST /import` | 구간 수신 → 폴더 생성 → MP3 추출 시작 (idempotent: 같은 loopId 재수신 시 갱신) |
 | `GET /api/items` | 아이템 목록 (상태 필터) |
 | `GET /api/items/:videoId/:loopId` | 아이템 조회 |
@@ -188,6 +189,7 @@ PhraseLoopData/
 - 로컬 앱 내 간격 반복/학습 통계
 - 문장 단위 자동 분할 (구간 하나 = 카드 하나; 긴 구간은 확장에서 애초에 짧게 자르는 것으로 해결)
 - .apkg 생성 (AnkiConnect + CSV fallback으로 충분)
+- 영상(mp4)·장면 캡처 저장 — 미디어는 mp3만. 받아쓰기는 청취 훈련이라 영상은 힌트로 작동해 오히려 방해되고, 용량도 mp3의 3~20배. 장면 확인은 카드의 SourceUrl + Start로 YouTube 원본 시점 이동으로 대체. (필요 시 향후 "시작 프레임 1장 캡처" 옵션으로 검토)
 
 ## 10. 성공 기준
 

@@ -62,7 +62,16 @@ export async function renameLoop(videoId: string, loopId: string, label: string,
   const video = data.videos[videoId];
   if (!video) return null;
 
-  video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, label, updatedAt } : loop));
+  video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, label, updatedAt, lastImportedHash: undefined } : loop));
+  await writeData(data);
+  return video;
+}
+
+export async function markLoopImported(videoId: string, loopId: string, captureHash: string): Promise<VideoLoops | null> {
+  const data = await readData();
+  const video = data.videos[videoId];
+  if (!video) return null;
+  video.loops = video.loops.map((loop) => (loop.id === loopId ? { ...loop, lastImportedHash: captureHash } : loop));
   await writeData(data);
   return video;
 }

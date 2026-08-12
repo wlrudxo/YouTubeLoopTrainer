@@ -13,6 +13,7 @@ import { LoopEngine } from "./loopEngine";
 import { PhraseLoopPanel, type PanelState } from "./panel";
 import { registerShortcuts } from "./shortcuts";
 import { VisibleCaptionCollector } from "./visibleCaptionCollector";
+import { importLoopToCompanion, readCompanionConfig } from "../shared/companion";
 import {
   ensureCaptionsEnabled,
   getChannelAvatarUrl,
@@ -168,6 +169,7 @@ function mountOrRenderPanel(): void {
       stopLoop,
       renameLoop: (loop, label) => void renameLoop(loop, label),
       setLoopStatus: (loop, status) => void setLoopStatus(loop, status),
+      importLoop: (loop) => void importLoop(loop),
       deleteLoop: (loop) => void deleteLoop(loop),
       setCollapsed,
       setDebugExpanded
@@ -484,6 +486,20 @@ async function setLoopStatus(loop: Loop, status: LoopStatus): Promise<void> {
     setMessage(formatStorageError(error));
   }
   debug.log("loop", "updated loop status", { id: loop.id, status });
+  render();
+}
+
+async function importLoop(loop: Loop): Promise<void> {
+  if (!state.videoId || !state.video) return;
+  setMessage("Sending to local dictation...");
+  render();
+  try {
+    const captureHash = await importLoopToCompanion(await readCompanionConfig(), state.video, loop);
+    state.video = await storage.markLoopImported(state.videoId, loop.id, captureHash);
+    setMessage("Sent. Local MP3 processing started.", 2400);
+  } catch (error) {
+    setMessage(error instanceof Error ? error.message : "Could not send the loop to local dictation.");
+  }
   render();
 }
 

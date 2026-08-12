@@ -33,6 +33,17 @@ export async function initializeDataRoot(dataDir, requestedPort = 17311) {
   return { config, created, configPath };
 }
 
+export async function allowOrigin(dataDir, config, origin) {
+  if (typeof origin !== "string" || !origin.startsWith("chrome-extension://")) {
+    throw new InputError("Only Chrome extension origins can be paired.");
+  }
+  if (!config.allowedOrigins.includes(origin)) {
+    config.allowedOrigins.push(origin);
+    await atomicWriteJson(join(dataDir, "config.json"), config);
+  }
+  return config;
+}
+
 export function validateImportPayload(value) {
   if (!value || typeof value !== "object") throw new InputError("Request body must be an object.");
 

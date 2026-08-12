@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getItem, importCapture, initializeDataRoot, InputError, listItems, patchItem } from "./storage.mjs";
+import { allowOrigin, getItem, importCapture, initializeDataRoot, InputError, listItems, patchItem } from "./storage.mjs";
 import { enqueueMediaProcessing } from "./media.mjs";
 
 const MAX_BODY_BYTES = 128 * 1024;
@@ -16,13 +16,13 @@ export async function createCompanionServer(options = {}) {
   const server = createServer(async (request, response) => {
     try {
       applySecurityHeaders(response);
-      if (!handleCors(request, response, config)) return;
+      const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "127.0.0.1"}`);
+      if (!handleCors(request, response, config, url.pathname)) return;
       if (request.method === "OPTIONS") {
         response.writeHead(204).end();
         return;
       }
 
-      const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "127.0.0.1"}`);
       if (request.method === "GET" && url.pathname === "/health") {
         sendJson(response, 200, { app: "PhraseLoop Companion", version: 1, dataDir });
         return;
@@ -33,6 +33,15 @@ export async function createCompanionServer(options = {}) {
       }
 
       requireToken(request, config.token);
+
+      if (request.method === "POST" && url.pathname === "/pair") {
+        const origin = request.headers.origin;
+        if (!origin) throw new InputError("Pairing requires a browser extension origin.");
+        await allowOrigin(dataDir, config, origin);
+        response.setHeader("Access-Control-Allow-Origin", origin);
+        sendJson(response, 200, { paired: true });
+        return;
+      }
 
       if (request.method === "POST" && url.pathname === "/import") {
         const result = await importCapture(dataDir, await readJsonBody(request));
@@ -128,12 +137,13 @@ function resolveDataDir(args) {
   return process.env.PHRASELOOP_DATA_DIR || resolve(homedir(), "PhraseLoopData");
 }
 
-function handleCors(request, response, config) {
+function handleCors(request, response, config, pathname) {
   const origin = request.headers.origin;
   if (!origin) return true;
   const host = request.headers.host ?? "";
   const sameOrigin = origin === `http://${host}`;
-  if (!sameOrigin && !config.allowedOrigins.includes(origin)) {
+  const pairing = pathname === "/pair" && origin.startsWith("chrome-extension://");
+  if (!sameOrigin && !pairing && !config.allowedOrigins.includes(origin)) {
     sendJson(response, 403, { error: "Origin is not allowed." });
     return false;
   }
