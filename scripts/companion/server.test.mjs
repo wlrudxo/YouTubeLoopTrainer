@@ -46,6 +46,11 @@ describe("companion HTTP server", () => {
     expect(page.status).toBe(200);
     expect(await page.text()).toContain("PhraseLoop Dictation");
     expect(cookie).toContain("HttpOnly");
+    expect(page.headers.get("content-security-policy")).toContain("style-src 'self'");
+
+    const stylesheet = await fetch(`${companion.baseUrl}/styles.css`);
+    expect(stylesheet.status).toBe(200);
+    expect(stylesheet.headers.get("content-type")).toContain("text/css");
 
     const items = await fetch(`${companion.baseUrl}/api/items`, { headers: { Cookie: cookie.split(";")[0] } });
     expect(items.status).toBe(200);

@@ -214,7 +214,7 @@ async function readJsonBody(request) {
 function applySecurityHeaders(response) {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "no-referrer");
-  response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'");
+  response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'");
 }
 
 function sendJson(response, status, value) {
