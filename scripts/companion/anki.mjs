@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { getItem, InputError, patchItem, updateAnkiState } from "./storage.mjs";
 
 const MODEL_NAME = "PhraseLoop Dictation";
-const MODEL_FIELDS = ["LoopId", "Audio", "Transcript", "Meaning", "Notes", "Thumbnail", "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"];
+const MODEL_FIELDS = ["Transcript", "Audio", "Meaning", "Notes", "Thumbnail", "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"];
 
 export async function syncItemToAnki(dataDir, videoId, loopId, config, options = {}) {
   const item = await getItem(dataDir, videoId, loopId);
@@ -33,19 +33,9 @@ export async function syncItemToAnki(dataDir, videoId, loopId, config, options =
   const thumbnailFilename = await storeThumbnail(invoke, dataDir, videoId);
   const fields = noteFields(item, filename, thumbnailFilename);
   const tags = buildTags(item);
-  let noteId = await findExistingNote(invoke, item);
-  let created = false;
-
-  if (noteId) {
-    await invoke("updateNote", { note: { id: noteId, fields, tags } });
-  } else {
-    const note = { deckName, modelName: MODEL_NAME, fields, tags, options: { allowDuplicate: false } };
-    const canAdd = await invoke("canAddNotes", { notes: [note] });
-    if (!canAdd?.[0]) throw new Error("Anki rejected the note as empty or duplicate.");
-    noteId = await invoke("addNote", { note });
-    if (!Number.isFinite(noteId)) throw new Error("Anki did not return a note ID.");
-    created = true;
-  }
+  const note = { deckName, modelName: MODEL_NAME, fields, tags, options: { allowDuplicate: true } };
+  const noteId = await invoke("addNote", { note });
+  if (!Number.isFinite(noteId)) throw new Error("Anki did not return a note ID.");
 
   const now = new Date().toISOString();
   const contentHash = calculateContentHash(item, audio);
@@ -60,7 +50,7 @@ export async function syncItemToAnki(dataDir, videoId, loopId, config, options =
     lastSyncedAt: now,
     contentHash
   }, now);
-  return { item: updated, noteId, created };
+  return { item: updated, noteId };
 }
 
 export function createAnkiInvoker(url = "http://127.0.0.1:8765") {
@@ -105,20 +95,10 @@ async function ensureModel(invoke) {
   await invoke("updateModelStyling", { model: { name: MODEL_NAME, css: modelCss() } });
 }
 
-async function findExistingNote(invoke, item) {
-  if (Number.isFinite(item.anki?.noteId)) {
-    const notes = await invoke("notesInfo", { notes: [item.anki.noteId] });
-    if (notes?.length) return item.anki.noteId;
-  }
-  const matches = await invoke("findNotes", { query: `note:\"${MODEL_NAME}\" LoopId:${item.loopId}` });
-  return Number.isFinite(matches?.[0]) ? matches[0] : null;
-}
-
 function noteFields(item, filename, thumbnailFilename) {
   return {
-    LoopId: item.loopId,
-    Audio: `[sound:${filename}]`,
     Transcript: item.transcript.trim(),
+    Audio: `[sound:${filename}]`,
     Meaning: item.meaning ?? "",
     Notes: item.notes ?? "",
     Thumbnail: thumbnailFilename ? `<img src="${thumbnailFilename}">` : "",
@@ -157,15 +137,15 @@ function calculateContentHash(item, audio) {
 }
 
 function frontTemplate() {
-  return '<div class="audio-container">{{Audio}}</div>';
+  return '<a class=thumbnail-link href="{{SourceUrl}}">{{Thumbnail}}</a><div class="audio-container">{{Audio}}</div>';
 }
 
 function backTemplate() {
-  return "{{FrontSide}}<hr id=answer><div class=transcript>{{Transcript}}</div>{{#Meaning}}<div class=meaning>{{Meaning}}</div>{{/Meaning}}<div class=notes>{{Notes}}</div><a class=thumbnail-link href=\"{{SourceUrl}}\">{{Thumbnail}}</a><div class=source-title>{{SourceTitle}}</div><div class=channel-title>{{ChannelTitle}}</div>";
+  return "{{FrontSide}}<hr id=answer><div class=transcript>{{Transcript}}</div>{{#Meaning}}<div class=meaning>{{Meaning}}</div>{{/Meaning}}<div class=notes>{{Notes}}</div><div class=source-title>{{SourceTitle}}</div><div class=channel-title>{{ChannelTitle}}</div>";
 }
 
 function modelCss() {
-  return ".card{font-family:Arial;font-size:30px;text-align:center;color:#000;background:#fff;padding-bottom:72px}.transcript{margin:18px;font-size:30px}.meaning{margin:12px;font-size:25px}.notes{margin:10px;color:gray;font-size:20px}.source-title{margin:10px;color:#526078;font-size:16px}.channel-title{margin:8px;color:#526078;font-size:14px}.thumbnail-link{display:inline-block}.card img{display:block;max-width:280px;width:70vw;margin:16px auto;border-radius:8px}.audio-container{position:fixed;z-index:10;bottom:0;left:0;right:0;text-align:center;padding:10px 0;background:#fff;box-shadow:0 -2px 5px rgba(0,0,0,.1)}.audio-container .replaybutton{display:inline-block;margin:0 auto}";
+  return ".card{font-family:Arial;font-size:18px;text-align:center;color:#000;background:#fff;padding-bottom:72px}.transcript{margin:16px;font-size:21px;line-height:1.5}.meaning{margin:10px;font-size:17px}.notes{margin:8px;color:gray;font-size:15px}.source-title{margin:8px;color:#526078;font-size:13px}.channel-title{margin:6px;color:#526078;font-size:12px}.thumbnail-link{display:inline-block}.card img{display:block;max-width:280px;width:70vw;margin:16px auto;border-radius:8px}.audio-container{position:fixed;z-index:10;bottom:0;left:0;right:0;text-align:center;padding:10px 0;background:#fff;box-shadow:0 -2px 5px rgba(0,0,0,.1)}.audio-container .replaybutton{display:inline-block;margin:0 auto}";
 }
 
 async function storeThumbnail(invoke, dataDir, videoId) {

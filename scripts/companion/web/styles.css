@@ -16,7 +16,11 @@ h1, h2, h3, p { margin: 0; }
 .sidebar { padding: 12px 14px; border-right: 1px solid #dce2ec; background: #fff; }
 .sidebar-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
 .sidebar-head strong { font-size: 15px; }
-.sidebar-head button { min-height: 28px; padding: 0 9px; font-size: 12px; }
+.head-tools { display: flex; align-items: center; gap: 8px; }
+.anki-dot { width: 10px; height: 10px; border-radius: 50%; background: #cad2df; }
+.anki-dot.is-online { background: #22a05c; }
+.anki-dot.is-offline { background: #d94848; }
+.icon-button { min-height: 28px; width: 28px; padding: 0; font-size: 16px; line-height: 1; }
 .filters, .button-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .filters button { min-height: 28px; padding: 0 9px; font-size: 12px; }
 .muted { color: #69758a; }

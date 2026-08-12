@@ -157,12 +157,14 @@ PhraseLoopData/
 ## 7. Anki 연동 (AnkiConnect)
 
 - AnkiConnect 애드온(코드 2055492159, FooSoft) 사용, `127.0.0.1:8765`. Anki 데스크톱 실행 중이어야 함.
-- "Anki에 추가" 동작 순서: 서버 검수 게이트 확인 → `version` 연결 확인 → `deckNames`/`createDeck` → `modelNames`와 `modelFieldNames`로 "PhraseLoop Dictation" 검증(없으면 `createModel`) → `storeMediaFile`로 `phraseloop_LOOP_ID.mp3` 및 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg` 복사 → 저장된 noteId 조회 또는 LoopId 검색 → `addNote`/`updateNoteFields` → noteId와 contentHash를 item.json에 저장, `anki.status=synced`.
-- **멱등성**: LoopId를 노트 타입의 첫 번째 필드로 두어 중복 감지. noteId가 이미 있으면 버튼은 "Anki 카드 업데이트"(`updateNoteFields`)로 동작. Anki에서 노트가 삭제된 경우(조회 실패)는 재추가 허용. `contentHash` 비교로 "로컬이 Anki보다 새로움" 표시.
+- "Anki에 추가" 동작 순서: 서버 게이트 확인(MP3 완료 + 비어 있지 않은 transcript) → `version` 연결 확인 → `deckNames`/`createDeck` → `modelNames`와 `modelFieldNames`로 "PhraseLoop Dictation" 검증(없으면 `createModel`) → `storeMediaFile`로 `phraseloop_LOOP_ID.mp3` 및 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg` 복사 → `addNote`(allowDuplicate) → noteId와 contentHash를 item.json에 저장, `anki.status=synced`, review는 자동으로 `ready` 처리.
+- **Add 전용 (Yomitan 방식, update 없음)**: 기존 노트 조회(`notesInfo`/`findNotes`)나 `updateNoteFields`는 사용하지 않는다 — Anki에서 사용자가 노트를 지웠을 때 조회가 에러를 내는 등 동기화 가정이 깨지기 쉽기 때문. 버튼은 추가 후 "Added ✓"로 표시되고, 다시 누르면 새 노트로 재추가된다. 수정이 필요하면 Anki에서 직접 고치거나, 지우고 다시 추가한다.
 - **카드는 타이핑 입력(`{{type:...}}`)을 사용하지 않는다.** 타이핑 훈련은 로컬 Dictation 앱에서 이미 수행했으므로, Anki에서는 듣기 → 머릿속 재구성 → 정답 확인 → 복습 버튼(Again/Hard/Good/Easy) 자가 평가로 진행한다. 모바일 복습이 수월해지고, 구간이 여러 문장이어도 카드로 쓸 수 있다.
-- 영상 썸네일은 **뒷면에만** 표시한다 (앞면에 있으면 영상 맥락이 힌트로 작동). 썸네일 이미지는 `storeMediaFile`로 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg`로 복사하고, `Thumbnail` 필드에 `<img>` 태그로 넣는다.
+- 영상 썸네일은 **앞면과 뒷면 모두 맨 위에** 표시한다 (영상 맥락 상기가 힌트 우려보다 유용하다고 판단). 썸네일 이미지는 `storeMediaFile`로 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg`로 복사하고, `Thumbnail` 필드에 `<img>` 태그로 넣는다. 썸네일 클릭 시 YouTube 원본 시점으로 이동.
 
-노트 타입 "PhraseLoop Dictation" — 필드 순서: `LoopId, Audio, Transcript, Meaning, Notes, Thumbnail, SourceTitle, ChannelTitle, SourceUrl, Start, End`
+노트 타입 "PhraseLoop Dictation" — 필드 순서: `Transcript, Audio, Meaning, Notes, Thumbnail, SourceTitle, ChannelTitle, SourceUrl, Start, End`
+
+LoopId는 노트 필드로 저장하지 않는다 (update 로직이 없으므로 키가 불필요). Transcript가 첫 필드이므로 Anki의 기본 중복 감지가 문장 기준으로 동작한다.
 
 `Meaning`은 빈칸일 수 있으며, 로컬 앱에서 입력한 번역/의미가 그대로 들어간다.
 
@@ -170,6 +172,7 @@ PhraseLoopData/
 
 앞면:
 ```
+<a class="thumbnail-link" href="{{SourceUrl}}">{{Thumbnail}}</a>
 <div class="audio-container">{{Audio}}</div>
 ```
 
@@ -180,7 +183,6 @@ PhraseLoopData/
 <div class="transcript">{{Transcript}}</div>
 {{#Meaning}}<div class="meaning">{{Meaning}}</div>{{/Meaning}}
 <div class="notes">{{Notes}}</div>
-<a href="{{SourceUrl}}">{{Thumbnail}}</a>
 <div class="source-title">{{SourceTitle}}</div>
 <div class="channel-title">{{ChannelTitle}}</div>
 ```

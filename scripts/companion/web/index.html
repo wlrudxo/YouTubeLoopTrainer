@@ -12,7 +12,10 @@
       <aside class="sidebar">
         <div class="sidebar-head">
           <strong>PhraseLoop Dictation</strong>
-          <button id="refreshButton" type="button" title="Reload items">Refresh</button>
+          <span class="head-tools">
+            <span id="ankiStatus" class="anki-dot" title="Checking Anki..."></span>
+            <button id="refreshButton" type="button" class="icon-button" title="Reload items" aria-label="Refresh">&#x27F3;</button>
+          </span>
         </div>
         <div class="filters" role="group" aria-label="Item status">
           <button type="button" data-filter="all" class="is-active">All</button>

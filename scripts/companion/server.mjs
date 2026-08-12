@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { allowOrigin, discardItem, getItem, importCapture, initializeDataRoot, InputError, listItems, patchItem } from "./storage.mjs";
 import { enqueueMediaProcessing } from "./media.mjs";
-import { syncItemToAnki } from "./anki.mjs";
+import { createAnkiInvoker, syncItemToAnki } from "./anki.mjs";
 import { ensureVideoAssets } from "./assets.mjs";
 
 const MAX_BODY_BYTES = 128 * 1024;
@@ -80,6 +80,16 @@ export async function createCompanionServer(options = {}) {
         });
         return;
       }
+      if (request.method === "GET" && url.pathname === "/api/anki/status") {
+        const invoke = options.ankiInvoke ?? createAnkiInvoker(config.anki.url);
+        try {
+          await invoke("version");
+          sendJson(response, 200, { connected: true });
+        } catch {
+          sendJson(response, 200, { connected: false });
+        }
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/items") {
         sendJson(response, 200, { items: await listItems(dataDir) });
         return;
@@ -141,7 +151,7 @@ export async function createCompanionServer(options = {}) {
       const ankiMatch = /^\/api\/items\/([A-Za-z0-9_-]{1,128})\/([A-Za-z0-9_-]{1,128})\/anki$/.exec(url.pathname);
       if (request.method === "POST" && ankiMatch) {
         const result = await syncItemToAnki(dataDir, ankiMatch[1], ankiMatch[2], config);
-        sendJson(response, 200, { noteId: result.noteId, created: result.created, anki: result.item.anki });
+        sendJson(response, 200, { noteId: result.noteId, anki: result.item.anki });
         return;
       }
       if (request.method === "PATCH" && itemMatch) {

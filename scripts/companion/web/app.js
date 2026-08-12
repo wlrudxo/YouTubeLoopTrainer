@@ -25,9 +25,24 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+const ankiStatus = document.querySelector("#ankiStatus");
+async function checkAnkiStatus() {
+  let connected = false;
+  try {
+    connected = (await api("/api/anki/status")).connected === true;
+  } catch {
+    connected = false;
+  }
+  ankiStatus.classList.toggle("is-online", connected);
+  ankiStatus.classList.toggle("is-offline", !connected);
+  ankiStatus.title = connected ? "Anki connected" : "Anki not reachable. Start Anki with AnkiConnect installed.";
+}
+window.setInterval(checkAnkiStatus, 30_000);
+
 void loadItems();
 
 async function loadItems() {
+  void checkAnkiStatus();
   try {
     const data = await api("/api/items");
     state.items = data.items;
@@ -152,13 +167,16 @@ function renderWorkspace(item) {
   });
   const ankiButton = root.querySelector('[data-action="anki"]');
   ankiButton.disabled = item.processing.status !== "complete";
-  ankiButton.textContent = item.anki?.noteId ? "Update Anki card" : "Add to Anki";
+  ankiButton.textContent = item.anki?.noteId ? "Added ✓" : "Add to Anki";
+  ankiButton.title = item.anki?.noteId ? "Already added. Click to add again as a new note." : "";
   ankiButton.addEventListener("click", async () => {
     try {
       ankiButton.disabled = true;
       await saveFields(root, item);
       const result = await api(`/api/items/${item.videoId}/${item.loopId}/anki`, { method: "POST" });
-      showMessage(root, result.created ? `Added to Anki (note ${result.noteId}).` : `Updated Anki note ${result.noteId}.`);
+      showMessage(root, `Added to Anki (note ${result.noteId}).`);
+      ankiButton.textContent = "Added ✓";
+      ankiButton.disabled = false;
       window.setTimeout(loadItems, 1500);
     } catch (error) {
       showMessage(root, error.message, true);
