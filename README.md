@@ -152,7 +152,7 @@ Import `phraseloop-anki.csv` into Anki and copy the files from `media/` into you
 
 The companion stores imported loops and generated MP3 files in a local `PhraseLoopData` folder and serves the dictation review UI on `127.0.0.1`.
 
-Requirements: `yt-dlp` and `ffmpeg` must be available on `PATH`.
+Requirements: `yt-dlp` and `ffmpeg` must be available on `PATH`. For automatic card creation, install AnkiConnect (add-on code `2055492159`) and keep Anki Desktop running while adding or updating cards.
 
 ```powershell
 npm run companion
@@ -160,7 +160,7 @@ npm run companion
 
 On first run, copy the token printed by the command (or read it from `PhraseLoopData/config.json`). In the extension Settings page, enter the token under **Local Dictation Companion** and click **Save & Connect**. A saved YouTube loop can then be sent with its **Send** button.
 
-Open `http://127.0.0.1:17311` to practice dictation, correct the captured caption draft, assign difficulty and tags, and mark the transcript reviewed. All source metadata, review data, and generated media remain in the local `PhraseLoopData` folder.
+Open `http://127.0.0.1:17311` to practice dictation, correct the captured caption draft, assign difficulty and tags, and mark the transcript reviewed. Reviewed items can be added directly to the `English::PhraseLoop` Anki deck; sending the same LoopId again updates the existing note. All source metadata, review data, and generated media remain in the local `PhraseLoopData` folder.
 
 Optional video clips:
 

@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { allowOrigin, getItem, importCapture, initializeDataRoot, InputError, listItems, patchItem } from "./storage.mjs";
 import { enqueueMediaProcessing } from "./media.mjs";
+import { syncItemToAnki } from "./anki.mjs";
 
 const MAX_BODY_BYTES = 128 * 1024;
 
@@ -111,6 +112,13 @@ export async function createCompanionServer(options = {}) {
           console.error(`Media processing failed for ${processMatch[2]}:`, error.message);
         });
         sendJson(response, 202, { processing: "queued" });
+        return;
+      }
+
+      const ankiMatch = /^\/api\/items\/([A-Za-z0-9_-]{1,128})\/([A-Za-z0-9_-]{1,128})\/anki$/.exec(url.pathname);
+      if (request.method === "POST" && ankiMatch) {
+        const result = await syncItemToAnki(dataDir, ankiMatch[1], ankiMatch[2], config);
+        sendJson(response, 200, { noteId: result.noteId, created: result.created, anki: result.item.anki });
         return;
       }
       if (request.method === "PATCH" && itemMatch) {

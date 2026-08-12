@@ -98,6 +98,20 @@ function renderWorkspace(item) {
   action(root, "reveal", () => showFeedback(root, answer.value, transcript.value, true));
   action(root, "save", () => saveReview(root, item, false));
   action(root, "ready", () => saveReview(root, item, true));
+  const ankiButton = root.querySelector('[data-action="anki"]');
+  ankiButton.disabled = item.processing.status !== "complete" || item.review.status !== "ready";
+  ankiButton.textContent = item.anki?.noteId ? "Update Anki card" : "Add to Anki";
+  ankiButton.addEventListener("click", async () => {
+    try {
+      ankiButton.disabled = true;
+      const result = await api(`/api/items/${item.videoId}/${item.loopId}/anki`, { method: "POST" });
+      showMessage(root, result.created ? `Added to Anki (note ${result.noteId}).` : `Updated Anki note ${result.noteId}.`);
+      window.setTimeout(loadItems, 1500);
+    } catch (error) {
+      showMessage(root, error.message, true);
+      ankiButton.disabled = false;
+    }
+  });
   answer.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -124,7 +138,7 @@ async function saveReview(root, item, ready) {
     });
     state.selected = updated;
     showMessage(root, ready ? "Transcript reviewed and ready for Anki." : "Draft saved.");
-    await loadItems();
+    window.setTimeout(loadItems, 1200);
   } catch (error) {
     showMessage(root, error.message, true);
   }

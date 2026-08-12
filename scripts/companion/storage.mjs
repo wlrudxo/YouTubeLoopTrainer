@@ -195,6 +195,21 @@ export async function updateProcessing(dataDir, videoId, loopId, processing, now
   });
 }
 
+export async function updateAnkiState(dataDir, videoId, loopId, anki, now = new Date().toISOString()) {
+  requiredSafeId(videoId, "videoId");
+  requiredSafeId(loopId, "loopId");
+  return enqueueMutation(dataDir, async () => {
+    const itemPath = join(getLoopDir(dataDir, videoId, loopId), "item.json");
+    const item = await readJsonIfExists(itemPath);
+    if (!item) return null;
+    item.anki = { ...item.anki, ...anki };
+    item.updatedAt = now;
+    await atomicWriteJson(itemPath, item);
+    await rebuildLibrary(dataDir);
+    return item;
+  });
+}
+
 export async function rebuildLibrary(dataDir) {
   const items = [];
   const videosDir = join(dataDir, "videos");
