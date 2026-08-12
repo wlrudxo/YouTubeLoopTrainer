@@ -19,6 +19,7 @@ import {
   getChannelTitle,
   findPanelTarget,
   findVideoElement,
+  getLiveState,
   getVideoIdFromUrl,
   getVideoTitle,
   getWatchUrl,
@@ -104,6 +105,17 @@ function resetCurrentVideoState(): void {
 }
 
 function mountOrRenderPanel(): void {
+  const liveState = getLiveState();
+  if (liveState === "unknown") {
+    window.setTimeout(mountOrRenderPanel, 500);
+    return;
+  }
+  if (liveState === "live") {
+    debug.log("app", "live stream detected, panel disabled");
+    panel?.unmount();
+    return;
+  }
+
   const target = findPanelTarget();
   if (!target) {
     window.setTimeout(mountOrRenderPanel, 500);

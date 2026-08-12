@@ -59,6 +59,16 @@ export function ensureCaptionsEnabled(): boolean {
   return true;
 }
 
+export function getLiveState(): "live" | "vod" | "unknown" {
+  const video = findVideoElement();
+  if (video && video.readyState >= 1) {
+    return video.duration === Infinity ? "live" : "vod";
+  }
+  const badge = document.querySelector<HTMLElement>(".ytp-live-badge");
+  if (badge && !badge.hasAttribute("disabled")) return "live";
+  return "unknown";
+}
+
 export function findPanelTarget(): Element | null {
   return document.querySelector("#secondary") ?? document.querySelector("#below");
 }
