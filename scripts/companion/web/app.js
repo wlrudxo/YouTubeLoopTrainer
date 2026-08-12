@@ -98,7 +98,7 @@ function renderWorkspace(item) {
   setText(root, "source", `${item.sourceTitle || item.videoId} · ${formatRange(item.start, item.end)}`);
   setText(root, "title", item.label || item.transcriptDraft || "Untitled loop");
   setText(root, "status", `${item.processing.status} / ${item.review.status}`);
-  setText(root, "processing", item.processing.error || `Attempts: ${item.processing.attempts}`);
+  setText(root, "processing", item.processing.error || "");
 
   const audio = role(root, "audio");
   audio.src = `/media/${item.videoId}/${item.loopId}/audio.mp3`;
