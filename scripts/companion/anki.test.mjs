@@ -33,15 +33,20 @@ async function readyItem() {
   return { dataDir, config };
 }
 
-function fakeAnki(existingNoteId = null) {
+function fakeAnki(existingNoteId = null, modelExists = false) {
   const calls = [];
   const invoke = async (action, params = {}) => {
     calls.push({ action, params });
     if (action === "version") return 6;
     if (action === "deckNames") return ["Default"];
     if (action === "createDeck") return 123;
-    if (action === "modelNames") return ["Basic"];
+    if (action === "modelNames") return modelExists ? ["PhraseLoop Dictation"] : ["Basic"];
+    if (action === "modelFieldNames") return [
+      "LoopId", "Audio", "Transcript", "Meaning", "Notes", "Thumbnail",
+      "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"
+    ];
     if (action === "createModel") return { id: 456 };
+    if (action === "updateModelTemplates" || action === "updateModelStyling") return null;
     if (action === "storeMediaFile") return params.filename;
     if (action === "findNotes") return existingNoteId ? [existingNoteId] : [];
     if (action === "canAddNotes") return [true];
@@ -64,8 +69,10 @@ describe("Anki sync", () => {
       "LoopId", "Audio", "Transcript", "Meaning", "Notes", "Thumbnail",
       "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"
     ]);
-    expect(createModel.params.cardTemplates[0].Front).toBe("{{Audio}}");
+    expect(createModel.params.cardTemplates[0].Front).toBe('<div class="audio-container">{{Audio}}</div>');
     expect(createModel.params.cardTemplates[0].Front).not.toContain("type:");
+    expect(createModel.params.css).toContain("max-width:280px");
+    expect(createModel.params.css).toContain("position:fixed");
     const add = anki.calls.find((call) => call.action === "addNote");
     expect(add.params.note.fields.Transcript).toBe("Where is Jane?");
     expect(add.params.note.fields.Meaning).toBe("제인은 어디 있나요?");
@@ -82,6 +89,16 @@ describe("Anki sync", () => {
     expect(result).toMatchObject({ noteId: 555, created: false });
     expect(anki.calls.some((call) => call.action === "updateNote")).toBe(true);
     expect(anki.calls.some((call) => call.action === "addNote")).toBe(false);
+  });
+
+  it("refreshes templates and styling for the current development model", async () => {
+    const { dataDir, config } = await readyItem();
+    const anki = fakeAnki(null, true);
+    await syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: anki.invoke });
+    const templates = anki.calls.find((call) => call.action === "updateModelTemplates");
+    const styling = anki.calls.find((call) => call.action === "updateModelStyling");
+    expect(templates.params.model.templates.Dictation.Front).toContain("audio-container");
+    expect(styling.params.model.css).toContain("max-width:280px");
   });
 
   it("rejects items that have not completed review", async () => {

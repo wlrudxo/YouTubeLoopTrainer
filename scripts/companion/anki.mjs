@@ -95,6 +95,13 @@ async function ensureModel(invoke) {
   if (JSON.stringify(fields) !== JSON.stringify(MODEL_FIELDS)) {
     throw new Error(`Delete the development note type '${MODEL_NAME}' in Anki, then try again.`);
   }
+  await invoke("updateModelTemplates", {
+    model: {
+      name: MODEL_NAME,
+      templates: { Dictation: { Front: frontTemplate(), Back: backTemplate() } }
+    }
+  });
+  await invoke("updateModelStyling", { model: { name: MODEL_NAME, css: modelCss() } });
 }
 
 async function findExistingNote(invoke, item) {
@@ -149,15 +156,15 @@ function calculateContentHash(item, audio) {
 }
 
 function frontTemplate() {
-  return "{{Audio}}";
+  return '<div class="audio-container">{{Audio}}</div>';
 }
 
 function backTemplate() {
-  return "{{FrontSide}}<hr id=answer><div class=transcript>{{Transcript}}</div>{{#Meaning}}<div class=meaning>{{Meaning}}</div>{{/Meaning}}<div class=notes>{{Notes}}</div><a href=\"{{SourceUrl}}\">{{Thumbnail}}</a><div class=source-title>{{SourceTitle}}</div><div class=channel-title>{{ChannelTitle}}</div>";
+  return "{{FrontSide}}<hr id=answer><div class=transcript>{{Transcript}}</div>{{#Meaning}}<div class=meaning>{{Meaning}}</div>{{/Meaning}}<div class=notes>{{Notes}}</div><a class=thumbnail-link href=\"{{SourceUrl}}\">{{Thumbnail}}</a><div class=source-title>{{SourceTitle}}</div><div class=channel-title>{{ChannelTitle}}</div>";
 }
 
 function modelCss() {
-  return ".card{font-family:Arial;font-size:20px;text-align:center;color:#172033;background:#fff}.transcript{margin:18px;font-size:24px}.meaning{margin:12px;color:#315bd6}.notes,.source-title,.channel-title{margin:10px;color:#526078}.channel-title{font-size:14px}.card img{display:block;max-width:480px;width:100%;margin:16px auto;border-radius:10px}";
+  return ".card{font-family:Arial;font-size:30px;text-align:center;color:#000;background:#fff;padding-bottom:72px}.transcript{margin:18px;font-size:30px}.meaning{margin:12px;font-size:25px}.notes{margin:10px;color:gray;font-size:20px}.source-title{margin:10px;color:#526078;font-size:16px}.channel-title{margin:8px;color:#526078;font-size:14px}.thumbnail-link{display:inline-block}.card img{display:block;max-width:280px;width:70vw;margin:16px auto;border-radius:8px}.audio-container{position:fixed;z-index:10;bottom:0;left:0;right:0;text-align:center;padding:10px 0;background:#fff;box-shadow:0 -2px 5px rgba(0,0,0,.1)}.audio-container .replaybutton{display:inline-block;margin:0 auto}";
 }
 
 async function storeThumbnail(invoke, dataDir, videoId) {
