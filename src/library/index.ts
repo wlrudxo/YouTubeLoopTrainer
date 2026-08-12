@@ -2,11 +2,13 @@ import * as storage from "../shared/storage";
 import { LOOP_URL_PARAM } from "../shared/constants";
 import { formatTime } from "../shared/time";
 import type { Loop, LoopStatus, VideoLoops } from "../shared/types";
+import { importLoopToCompanion, readCompanionConfig } from "../shared/companion";
 import "./library.css";
 
 const summaryEl = document.querySelector<HTMLParagraphElement>("#summary");
 const searchInput = document.querySelector<HTMLInputElement>("#searchInput");
 const settingsButton = document.querySelector<HTMLButtonElement>("#settingsButton");
+const sendPendingButton = document.querySelector<HTMLButtonElement>("#sendPendingButton");
 const videoList = document.querySelector<HTMLElement>("#videoList");
 const detailPanel = document.querySelector<HTMLElement>("#detailPanel");
 
@@ -17,6 +19,8 @@ let statusFilter: "all" | LoopStatus = "all";
 settingsButton?.addEventListener("click", () => {
   void chrome.runtime.openOptionsPage();
 });
+
+sendPendingButton?.addEventListener("click", () => void sendPendingLoops());
 
 searchInput?.addEventListener("input", () => {
   ensureSelectedVideo();
@@ -60,6 +64,11 @@ function render(): void {
   }
 
   summaryEl.textContent = `${videos.length} videos · ${totalLoops} loops`;
+  const pending = countPendingLoops();
+  if (sendPendingButton) {
+    sendPendingButton.textContent = `Send pending (${pending})`;
+    sendPendingButton.disabled = pending === 0;
+  }
   renderVideoList(videoList, filteredVideos);
   renderDetail(detailPanel, selectedVideo);
 }
@@ -238,11 +247,16 @@ function createLoopRow(video: VideoLoops, loop: Loop): HTMLElement {
     void deleteLoop(video, loop);
   });
 
+  const sendButton = document.createElement("button");
+  sendButton.type = "button";
+  sendButton.textContent = loop.lastImportedHash ? "Sent" : "Send local";
+  sendButton.addEventListener("click", () => void sendLoop(video, loop, sendButton));
+
   const meta = document.createElement("div");
   meta.className = "loop-meta";
   meta.textContent = `${formatTime(loop.start)} - ${formatTime(loop.end)} · ${formatMinute(loop.createdAt)}`;
 
-  primaryRow.append(openButton, deleteButton);
+  primaryRow.append(openButton, sendButton, deleteButton);
   secondaryRow.append(statusButton);
   tools.append(primaryRow, secondaryRow, meta);
   row.append(label, tools);
@@ -315,6 +329,46 @@ async function deleteLoop(video: VideoLoops, loop: Loop): Promise<void> {
 
   await storage.deleteLoop(video.videoId, loop.id);
   await load();
+}
+
+async function sendLoop(video: VideoLoops, loop: Loop, button?: HTMLButtonElement): Promise<boolean> {
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+  try {
+    const captureHash = await importLoopToCompanion(await readCompanionConfig(), video, loop);
+    await storage.markLoopImported(video.videoId, loop.id, captureHash);
+    loop.lastImportedHash = captureHash;
+    if (button) render();
+    return true;
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Retry send";
+      button.title = error instanceof Error ? error.message : "Send failed.";
+    }
+    return false;
+  }
+}
+
+async function sendPendingLoops(): Promise<void> {
+  if (!sendPendingButton) return;
+  const pending = videos.flatMap((video) => video.loops.filter((loop) => !loop.lastImportedHash).map((loop) => ({ video, loop })));
+  sendPendingButton.disabled = true;
+  let sent = 0;
+  for (const [index, entry] of pending.entries()) {
+    sendPendingButton.textContent = `Sending ${index + 1}/${pending.length}`;
+    if (await sendLoop(entry.video, entry.loop)) sent += 1;
+  }
+  await load();
+  if (sent !== pending.length && summaryEl) {
+    summaryEl.textContent += ` · ${pending.length - sent} send failures`;
+  }
+}
+
+function countPendingLoops(): number {
+  return videos.reduce((total, video) => total + video.loops.filter((loop) => !loop.lastImportedHash).length, 0);
 }
 
 function getFilteredVideos(): VideoLoops[] {
