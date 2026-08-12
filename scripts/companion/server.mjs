@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { allowOrigin, getItem, importCapture, initializeDataRoot, InputError, listItems, patchItem } from "./storage.mjs";
 import { enqueueMediaProcessing } from "./media.mjs";
@@ -28,7 +29,16 @@ export async function createCompanionServer(options = {}) {
         return;
       }
       if (request.method === "GET" && url.pathname === "/") {
-        sendHtml(response, 200, statusPage());
+        response.setHeader("Set-Cookie", `phraseloop_token=${config.token}; HttpOnly; SameSite=Strict; Path=/`);
+        await sendWebFile(response, "index.html");
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/app.js") {
+        await sendWebFile(response, "app.js");
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/styles.css") {
+        await sendWebFile(response, "styles.css");
         return;
       }
 
@@ -73,6 +83,20 @@ export async function createCompanionServer(options = {}) {
           return;
         }
         sendJson(response, 200, item);
+        return;
+      }
+
+      const mediaMatch = /^\/media\/([A-Za-z0-9_-]{1,128})\/([A-Za-z0-9_-]{1,128})\/audio\.mp3$/.exec(url.pathname);
+      if (request.method === "GET" && mediaMatch) {
+        const audioPath = join(dataDir, "videos", mediaMatch[1], "loops", mediaMatch[2], "audio.mp3");
+        try {
+          const audio = await readFile(audioPath);
+          response.writeHead(200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" });
+          response.end(audio);
+        } catch (error) {
+          if (error?.code === "ENOENT") sendJson(response, 404, { error: "Audio not found." });
+          else throw error;
+        }
         return;
       }
 
@@ -155,7 +179,11 @@ function handleCors(request, response, config, pathname) {
 }
 
 function requireToken(request, token) {
-  if (request.headers.authorization !== `Bearer ${token}`) throw new AuthError(401, "Invalid companion token.");
+  const cookie = request.headers.cookie ?? "";
+  const cookieToken = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("phraseloop_token="))?.slice("phraseloop_token=".length);
+  if (request.headers.authorization !== `Bearer ${token}` && cookieToken !== token) {
+    throw new AuthError(401, "Invalid companion token.");
+  }
 }
 
 async function readJsonBody(request) {
@@ -187,13 +215,16 @@ function sendJson(response, status, value) {
   response.end(`${JSON.stringify(value)}\n`);
 }
 
-function sendHtml(response, status, html) {
-  response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" });
-  response.end(html);
-}
-
-function statusPage() {
-  return "<!doctype html><meta charset=utf-8><title>PhraseLoop Companion</title><main><h1>PhraseLoop Companion</h1><p>The local service is running.</p></main>";
+async function sendWebFile(response, filename) {
+  const path = join(resolve(fileURLToPath(new URL(".", import.meta.url))), "web", filename);
+  const content = await readFile(path);
+  const contentType = filename.endsWith(".html")
+    ? "text/html; charset=utf-8"
+    : filename.endsWith(".css")
+      ? "text/css; charset=utf-8"
+      : "text/javascript; charset=utf-8";
+  response.writeHead(200, { "Content-Type": contentType, "Cache-Control": "no-store" });
+  response.end(content);
 }
 
 class AuthError extends Error {

@@ -39,6 +39,18 @@ describe("companion HTTP server", () => {
     expect(JSON.stringify(body)).not.toContain(companion.config.token);
   });
 
+  it("serves the local app and authenticates its same-site cookie", async () => {
+    const companion = await startTestServer();
+    const page = await fetch(`${companion.baseUrl}/`);
+    const cookie = page.headers.get("set-cookie");
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain("PhraseLoop Dictation");
+    expect(cookie).toContain("HttpOnly");
+
+    const items = await fetch(`${companion.baseUrl}/api/items`, { headers: { Cookie: cookie.split(";")[0] } });
+    expect(items.status).toBe(200);
+  });
+
   it("requires a token for imports and returns a capture hash", async () => {
     const companion = await startTestServer();
     const payload = {
