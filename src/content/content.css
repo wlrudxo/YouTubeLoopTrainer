@@ -1,13 +1,31 @@
 .phraseloop-panel {
+  position: fixed;
+  z-index: 2147483646;
+  top: 72px;
+  right: 16px;
   box-sizing: border-box;
-  margin: 0 0 12px;
+  margin: 0;
   padding: 12px;
-  width: 100%;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 88px);
+  overflow-y: auto;
   border: 1px solid rgba(15, 23, 42, 0.16);
   border-radius: 8px;
   background: #ffffff;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.22);
   color: #111827;
   font: 13px/1.35 Arial, sans-serif;
+}
+
+.phraseloop-panel.is-collapsed {
+  width: 40px;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .phraseloop-panel * {
@@ -33,7 +51,26 @@
 }
 
 .phraseloop-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-weight: 700;
+}
+
+.phraseloop-status-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: #cad2df;
+}
+
+.phraseloop-status-dot.is-online {
+  background: #22a05c;
+}
+
+.phraseloop-status-dot.is-offline {
+  background: #d94848;
 }
 
 .phraseloop-marker-row {
@@ -65,6 +102,16 @@
   padding: 0;
 }
 
+.phraseloop-launcher-button {
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  border-color: rgba(15, 23, 42, 0.2) !important;
+  background: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2);
+  font-weight: 700 !important;
+}
+
 .phraseloop-text-button {
   padding: 0 8px;
 }
@@ -74,6 +121,15 @@
   background: #eff6ff;
   color: #1d4ed8;
   font-weight: 700;
+}
+
+.phraseloop-send-button {
+  min-width: 72px;
+  padding: 0 12px;
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
 }
 
 .phraseloop-trim {
@@ -242,4 +298,13 @@
   word-break: break-word;
   color: #475569;
   font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+@media (max-width: 720px) {
+  .phraseloop-panel {
+    top: 64px;
+    right: 8px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 72px);
+  }
 }

@@ -54,7 +54,7 @@ After making code changes, run `npm run build` again and reload the extension fr
 ## Usage
 
 1. Start the companion (`npm run companion`) and pair it once in Settings.
-2. Open a YouTube video and expand the PhraseLoop panel in the right sidebar.
+2. Open a YouTube video and expand the floating PhraseLoop panel in the upper-right corner.
 3. Enable YouTube captions if you want caption-based loop names.
 4. Click `A` at the start of the phrase and `B` at the end.
 5. Adjust the range and label if needed, then save. The loop is sent to the companion.

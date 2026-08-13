@@ -11,12 +11,11 @@ import { LoopEngine } from "./loopEngine";
 import { PhraseLoopPanel, type PanelState } from "./panel";
 import { registerShortcuts } from "./shortcuts";
 import { VisibleCaptionCollector } from "./visibleCaptionCollector";
-import { importLoopToCompanion, readCompanionConfig } from "../shared/companion";
+import { checkCompanion, importLoopToCompanion, readCompanionConfig } from "../shared/companion";
 import {
   ensureCaptionsEnabled,
   getChannelAvatarUrl,
   getChannelTitle,
-  findPanelTarget,
   findVideoElement,
   getLiveState,
   getVideoIdFromUrl,
@@ -30,6 +29,8 @@ type AppState = {
   draft: DraftLoop;
   message: string;
   collapsed: boolean;
+  companionConnected: boolean | null;
+  sending: boolean;
   debugExpanded: boolean;
 };
 
@@ -40,6 +41,8 @@ const state: AppState = {
   draft: createEmptyDraft(),
   message: "",
   collapsed: true,
+  companionConnected: null,
+  sending: false,
   debugExpanded: false
 };
 
@@ -53,6 +56,7 @@ let messageTimer: number | null = null;
 let labelRefreshToken = 0;
 let captionCollector: VisibleCaptionCollector | null = null;
 let collectedCaptionLabel = "";
+const COMPANION_CHECK_INTERVAL_MS = 30_000;
 
 boot();
 
@@ -66,10 +70,22 @@ function boot(): void {
   captionCollector = new VisibleCaptionCollector(debug);
 
   loadCurrentVideo();
+  void refreshCompanionStatus();
+  window.setInterval(() => void refreshCompanionStatus(), COMPANION_CHECK_INTERVAL_MS);
   registerGlobalShortcuts();
   clearNavigationListener = onYouTubeNavigation(() => {
     loadCurrentVideo();
   });
+}
+
+async function refreshCompanionStatus(): Promise<void> {
+  try {
+    await checkCompanion(await readCompanionConfig());
+    state.companionConnected = true;
+  } catch {
+    state.companionConnected = false;
+  }
+  render();
 }
 
 function loadCurrentVideo(): void {
@@ -85,6 +101,7 @@ function loadCurrentVideo(): void {
   collectedCaptionLabel = "";
   captionCollector?.reset();
   state.message = "";
+  state.sending = false;
   loopEngine?.stop();
   loopEngine?.setVideo(findVideoElement());
 
@@ -95,6 +112,7 @@ function resetCurrentVideoState(): void {
   state.videoId = null;
   state.draft = createEmptyDraft();
   state.message = "";
+  state.sending = false;
   state.debugExpanded = false;
   collectedCaptionLabel = "";
   captionCollector?.reset();
@@ -115,12 +133,6 @@ function mountOrRenderPanel(): void {
     return;
   }
 
-  const target = findPanelTarget();
-  if (!target) {
-    window.setTimeout(mountOrRenderPanel, 500);
-    return;
-  }
-
   if (!panel) {
     panel = new PhraseLoopPanel(toPanelState(), {
       setA,
@@ -136,7 +148,7 @@ function mountOrRenderPanel(): void {
     });
   }
 
-  panel.mount(target);
+  panel.mount(document.body);
   render();
 }
 
@@ -187,6 +199,7 @@ function setB(): void {
 
   loopEngine?.setVideo(video);
   state.draft.markerB = video.currentTime;
+  state.collapsed = false;
   debug.log("draft", "set markerB", { currentTime: video.currentTime });
   collectedCaptionLabel = captionCollector?.stop() ?? "";
   const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
@@ -235,7 +248,7 @@ function updateDraftRange(start: number, end: number): void {
 
 async function saveDraftLoop(): Promise<void> {
   const videoId = state.videoId;
-  if (!videoId) return;
+  if (!videoId || state.sending) return;
 
   const validation = validateDraftMarkers(state.draft.markerA, state.draft.markerB);
   if (!validation.ok) {
@@ -263,10 +276,16 @@ async function saveDraftLoop(): Promise<void> {
     updatedAt: now
   };
 
+  loopEngine?.stop();
+  state.sending = true;
+  setMessage("Saving loop...");
+  render();
+
   let video: VideoLoops;
   try {
     video = await storage.addLoop(videoId, getVideoTitle(), getWatchUrl(videoId), loop, getCurrentVideoMetadata());
   } catch (error) {
+    state.sending = false;
     setMessage(formatStorageError(error));
     render();
     return;
@@ -288,6 +307,7 @@ async function saveDraftLoop(): Promise<void> {
     debug.log("companion", "send failed, loop kept as pending", { id: loop.id, reason });
     setMessage(`Kept as pending. ${reason}`, 4000);
   }
+  state.sending = false;
   render();
 }
 
@@ -447,6 +467,8 @@ function toPanelState(): PanelState {
     draft: state.draft,
     message: state.message,
     collapsed: state.collapsed,
+    companionConnected: state.companionConnected,
+    sending: state.sending,
     draftLoopActive: loopEngine?.getActiveLoop()?.id === DRAFT_LOOP_ID,
     debugRecords: debug.getRecords(),
     debugExpanded: state.debugExpanded,

@@ -7,6 +7,8 @@ export type PanelState = {
   draft: DraftLoop;
   message: string;
   collapsed: boolean;
+  companionConnected: boolean | null;
+  sending: boolean;
   draftLoopActive: boolean;
   debugRecords: DebugRecord[];
   debugExpanded: boolean;
@@ -78,14 +80,34 @@ export class PhraseLoopPanel {
   }
 
   private render(): void {
-    const { draft, message, collapsed, draftLoopActive, debugRecords, debugExpanded, debugEnabled } = this.state;
+    const { draft, message, collapsed, companionConnected, sending, draftLoopActive, debugRecords, debugExpanded, debugEnabled } = this.state;
     const validation = validateDraftMarkers(draft.markerA, draft.markerB);
 
     this.root.innerHTML = "";
     this.root.className = `phraseloop-panel${collapsed ? " is-collapsed" : ""}`;
 
+    if (collapsed) {
+      const expandButton = button("PL", "Expand PhraseLoop");
+      expandButton.className = "phraseloop-launcher-button";
+      expandButton.setAttribute("aria-label", "Expand PhraseLoop");
+      expandButton.addEventListener("click", () => this.actions.setCollapsed(false));
+      this.root.append(expandButton);
+      return;
+    }
+
     const header = element("div", "phraseloop-header");
-    header.append(element("div", "phraseloop-title", `PhraseLoop · v${APP_VERSION}`));
+    const title = element("div", "phraseloop-title", `PhraseLoop · v${APP_VERSION}`);
+    const companionStatus = element("span", `phraseloop-status-dot${companionConnected === true ? " is-online" : companionConnected === false ? " is-offline" : ""}`);
+    const companionStatusLabel = companionConnected === true
+      ? "Local app connected"
+      : companionConnected === false
+        ? "Local app not reachable"
+        : "Checking local app";
+    companionStatus.setAttribute("role", "status");
+    companionStatus.setAttribute("aria-label", companionStatusLabel);
+    companionStatus.title = companionStatusLabel;
+    title.append(companionStatus);
+    header.append(title);
 
     const headerActions = element("div", "phraseloop-header-actions");
     const copyCaptionButton = button("CC", "Copy visible caption");
@@ -94,18 +116,16 @@ export class PhraseLoopPanel {
     copyCaptionButton.addEventListener("click", this.actions.copyCaption);
     headerActions.append(copyCaptionButton);
 
-    const collapseButton = button(collapsed ? "+" : "-", collapsed ? "Expand" : "Collapse");
+    const collapseButton = button("-", "Collapse");
     collapseButton.className = "phraseloop-icon-button";
-    collapseButton.addEventListener("click", () => this.actions.setCollapsed(!collapsed));
+    collapseButton.addEventListener("click", () => this.actions.setCollapsed(true));
     headerActions.append(collapseButton);
     header.append(headerActions);
     this.root.append(header);
 
-    if (collapsed) return;
-
     const markerRow = element("div", "phraseloop-marker-row");
-    markerRow.append(this.markerButton("A", draft.markerA, this.actions.setA));
-    markerRow.append(this.markerButton("B", draft.markerB, this.actions.setB));
+    markerRow.append(this.markerButton("A", draft.markerA, this.actions.setA, sending));
+    markerRow.append(this.markerButton("B", draft.markerB, this.actions.setB, sending));
     this.root.append(markerRow);
 
     if (validation.ok) {
@@ -119,13 +139,13 @@ export class PhraseLoopPanel {
     labelInput.value = draft.label;
     labelInput.rows = 3;
     labelInput.placeholder = validation.ok ? "Loop label" : "Set A and B markers";
-    labelInput.disabled = !validation.ok;
+    labelInput.disabled = !validation.ok || sending;
     labelInput.addEventListener("input", () => this.actions.updateDraftLabel(labelInput.value));
     labelRow.append(labelInput);
 
-    const saveButton = button("✓", "Send to local dictation");
-    saveButton.className = "phraseloop-icon-button";
-    saveButton.disabled = !validation.ok;
+    const saveButton = button(sending ? "Sending..." : "Send", "Send to local dictation");
+    saveButton.className = "phraseloop-send-button";
+    saveButton.disabled = !validation.ok || sending;
     saveButton.setAttribute("aria-label", "Send to local dictation");
     saveButton.addEventListener("click", this.actions.save);
     labelRow.append(saveButton);
@@ -150,9 +170,10 @@ export class PhraseLoopPanel {
     }
   }
 
-  private markerButton(label: string, value: number | null, action: () => void): HTMLElement {
+  private markerButton(label: string, value: number | null, action: () => void, disabled: boolean): HTMLElement {
     const setButton = button(`${label} ${value === null ? "--:--.-" : formatTime(value)}`, `Set ${label}`);
     setButton.className = "phraseloop-marker-button";
+    setButton.disabled = disabled;
     setButton.addEventListener("click", action);
     return setButton;
   }

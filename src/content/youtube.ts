@@ -69,10 +69,6 @@ export function getLiveState(): "live" | "vod" | "unknown" {
   return "unknown";
 }
 
-export function findPanelTarget(): Element | null {
-  return document.querySelector("#secondary") ?? document.querySelector("#below");
-}
-
 export function onYouTubeNavigation(callback: () => void): () => void {
   let lastVideoId = getVideoIdFromUrl();
   let timeoutId: number | null = null;

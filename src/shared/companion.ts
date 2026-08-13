@@ -24,6 +24,10 @@ export async function pairCompanion(config: CompanionConfig): Promise<void> {
   await request(config, "/pair", { method: "POST" });
 }
 
+export async function checkCompanion(config: CompanionConfig): Promise<void> {
+  await request(config, "/health", { method: "GET" });
+}
+
 export async function importLoopToCompanion(config: CompanionConfig, video: VideoLoops, loop: Loop): Promise<void> {
   await request(config, "/import", {
     method: "POST",

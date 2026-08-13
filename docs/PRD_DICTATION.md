@@ -97,7 +97,7 @@ PhraseLoopData/
 
 확장은 채집과 전송만 담당하며, 라이브러리/학습 관리 기능은 없다. 데이터 원본은 항상 `PhraseLoopData/`이고, 확장과 로컬 앱 사이에 동기화는 없다 — **순차적 이동**만 있다.
 
-- 캡처 UX(A/B 마커, 트림, 미리듣기, 자막 라벨 수집, 단축키)는 유지.
+- 캡처 UX(A/B 마커, 트림, 미리듣기, 자막 라벨 수집, 단축키)는 YouTube 레이아웃과 분리된 우측 상단 floating panel로 제공한다. 일반/영화관 모드가 같은 패널을 사용한다.
 - 저장 시 `POST /import`로 전송 (loopId, videoId, title, url, start, end, label, channelTitle, channelAvatarUrl — label이 로컬 앱의 `transcriptDraft`가 된다).
 - **전송 성공 = 확장 storage에서 해당 루프 삭제.** 따라서 확장에 남아 있는 루프 = 미전송분 전부이며, 불일치라는 개념이 없다. hash 추적 불필요.
 - 팝업 = 미전송 큐: 대기 루프 목록, "모두 보내기", 개별 삭제, Dictation 앱 열기, 설정 링크.
