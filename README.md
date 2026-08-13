@@ -113,7 +113,7 @@ npx tsc --noEmit
 
 The companion stores imported loops and generated MP3 files in a local `PhraseLoopData` folder and serves the dictation review UI on `127.0.0.1`.
 
-Requirements: `yt-dlp` and `ffmpeg` must be available on `PATH`. For automatic card creation, install AnkiConnect (add-on code `2055492159`) and keep Anki Desktop running while adding or updating cards.
+Requirements: `yt-dlp` and `ffmpeg` must be available on `PATH`. For automatic card creation, install AnkiConnect (add-on code `2055492159`) and keep Anki Desktop running while adding cards.
 
 ```powershell
 npm run companion
@@ -122,6 +122,8 @@ npm run companion
 On first run, copy the token printed by the command (or read it from `PhraseLoopData/config.json`). In the extension Settings page, enter the token under **Local Dictation Companion** and click **Save & Connect**. Saved YouTube loops are then sent automatically; failed sends stay in the popup queue.
 
 Open `http://127.0.0.1:17311` to practice dictation, correct the captured caption draft, and add optional meaning, notes, and tags. Discarded items stay tombstoned and are not recreated by later imports. Items can be added directly to the `English::PhraseLoop` Anki deck. Anki export is add-only: clicking **Added ✓** again creates another note. The card plays only the audio on the front and shows the transcript, optional meaning, notes, local thumbnail, and source details on the back. All source metadata, review data, and generated media remain in the local `PhraseLoopData` folder.
+
+PhraseLoop creates the `PhraseLoop Dictation` note type only when it is missing. For an existing note type it verifies the required fields and only fills their values; card templates, styling, field order, and user-added fields remain under the user's control in Anki.
 
 ## Current Scope
 

@@ -83,16 +83,10 @@ async function ensureModel(invoke) {
     return;
   }
   const fields = await invoke("modelFieldNames", { modelName: MODEL_NAME });
-  if (JSON.stringify(fields) !== JSON.stringify(MODEL_FIELDS)) {
-    throw new Error(`Delete the development note type '${MODEL_NAME}' in Anki, then try again.`);
+  const missingFields = MODEL_FIELDS.filter((field) => !fields.includes(field));
+  if (missingFields.length > 0) {
+    throw new Error(`The Anki note type '${MODEL_NAME}' is missing required fields: ${missingFields.join(", ")}.`);
   }
-  await invoke("updateModelTemplates", {
-    model: {
-      name: MODEL_NAME,
-      templates: { Dictation: { Front: frontTemplate(), Back: backTemplate() } }
-    }
-  });
-  await invoke("updateModelStyling", { model: { name: MODEL_NAME, css: modelCss() } });
 }
 
 function noteFields(item, filename, thumbnailFilename) {

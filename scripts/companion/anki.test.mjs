@@ -33,7 +33,7 @@ async function readyItem() {
   return { dataDir, config };
 }
 
-function fakeAnki(existingNoteId = null, modelExists = false) {
+function fakeAnki({ modelExists = false, modelFields = null } = {}) {
   const calls = [];
   const invoke = async (action, params = {}) => {
     calls.push({ action, params });
@@ -41,12 +41,11 @@ function fakeAnki(existingNoteId = null, modelExists = false) {
     if (action === "deckNames") return ["Default"];
     if (action === "createDeck") return 123;
     if (action === "modelNames") return modelExists ? ["PhraseLoop Dictation"] : ["Basic"];
-    if (action === "modelFieldNames") return [
+    if (action === "modelFieldNames") return modelFields ?? [
       "Transcript", "Audio", "Meaning", "Notes", "Thumbnail",
       "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"
     ];
     if (action === "createModel") return { id: 456 };
-    if (action === "updateModelTemplates" || action === "updateModelStyling") return null;
     if (action === "storeMediaFile") return params.filename;
     if (action === "addNote") return 789;
     throw new Error(`Unexpected action: ${action}`);
@@ -90,14 +89,27 @@ describe("Anki sync", () => {
     expect(second.calls.every((call) => !["updateNote", "notesInfo", "findNotes", "canAddNotes"].includes(call.action))).toBe(true);
   });
 
-  it("refreshes templates and styling for the current development model", async () => {
+  it("preserves templates, styling, field order, and extra fields on an existing model", async () => {
     const { dataDir, config } = await readyItem();
-    const anki = fakeAnki(null, true);
+    const anki = fakeAnki({
+      modelExists: true,
+      modelFields: [
+        "Extra", "End", "Start", "SourceUrl", "ChannelTitle", "SourceTitle",
+        "Thumbnail", "Notes", "Meaning", "Audio", "Transcript"
+      ]
+    });
     await syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: anki.invoke });
-    const templates = anki.calls.find((call) => call.action === "updateModelTemplates");
-    const styling = anki.calls.find((call) => call.action === "updateModelStyling");
-    expect(templates.params.model.templates.Dictation.Front).toContain("audio-container");
-    expect(styling.params.model.css).toContain("max-width:280px");
+    expect(anki.calls.some((call) => call.action === "createModel")).toBe(false);
+    expect(anki.calls.some((call) => call.action === "updateModelTemplates")).toBe(false);
+    expect(anki.calls.some((call) => call.action === "updateModelStyling")).toBe(false);
+  });
+
+  it("reports required fields missing from an existing model", async () => {
+    const { dataDir, config } = await readyItem();
+    const anki = fakeAnki({ modelExists: true, modelFields: ["Transcript", "Audio"] });
+    await expect(syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: anki.invoke }))
+      .rejects.toThrow(/Meaning.*Notes.*Thumbnail.*SourceTitle.*ChannelTitle.*SourceUrl.*Start.*End/);
+    expect(anki.calls.some((call) => call.action === "addNote")).toBe(false);
   });
 
   it("adds an unreviewed item and marks it ready", async () => {

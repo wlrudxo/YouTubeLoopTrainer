@@ -150,7 +150,7 @@ PhraseLoopData/
 ## 7. Anki 연동 (AnkiConnect)
 
 - AnkiConnect 애드온(코드 2055492159, FooSoft) 사용, `127.0.0.1:8765`. Anki 데스크톱 실행 중이어야 함.
-- "Anki에 추가" 동작 순서: 서버 게이트 확인(MP3 완료 + 비어 있지 않은 transcript) → `version` 연결 확인 → `deckNames`/`createDeck` → `modelNames`와 `modelFieldNames`로 "PhraseLoop Dictation" 검증(없으면 `createModel`) → `storeMediaFile`로 `phraseloop_LOOP_ID.mp3` 및 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg` 복사 → `addNote`(allowDuplicate) → noteId와 contentHash를 item.json에 저장, `anki.status=synced`, review는 자동으로 `ready` 처리.
+- "Anki에 추가" 동작 순서: 서버 게이트 확인(MP3 완료 + 비어 있지 않은 transcript) → `version` 연결 확인 → `deckNames`/`createDeck` → "PhraseLoop Dictation" 노트 타입이 없으면 기본 필드·템플릿·CSS로 `createModel`, 이미 있으면 필수 필드의 존재만 검증 → `storeMediaFile`로 `phraseloop_LOOP_ID.mp3` 및 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg` 복사 → `addNote`(allowDuplicate) → noteId와 contentHash를 item.json에 저장, `anki.status=synced`, review는 자동으로 `ready` 처리.
 - **Add 전용 (Yomitan 방식, update 없음)**: 기존 노트 조회(`notesInfo`/`findNotes`)나 `updateNoteFields`는 사용하지 않는다 — Anki에서 사용자가 노트를 지웠을 때 조회가 에러를 내는 등 동기화 가정이 깨지기 쉽기 때문. 버튼은 추가 후 "Added ✓"로 표시되고, 다시 누르면 새 노트로 재추가된다. 수정이 필요하면 Anki에서 직접 고치거나, 지우고 다시 추가한다.
 - **카드는 타이핑 입력(`{{type:...}}`)을 사용하지 않는다.** 타이핑 훈련은 로컬 Dictation 앱에서 이미 수행했으므로, Anki에서는 듣기 → 머릿속 재구성 → 정답 확인 → 복습 버튼(Again/Hard/Good/Easy) 자가 평가로 진행한다. 모바일 복습이 수월해지고, 구간이 여러 문장이어도 카드로 쓸 수 있다.
 - 영상 썸네일은 **앞면과 뒷면 모두 맨 위에** 표시한다 (영상 맥락 상기가 힌트 우려보다 유용하다고 판단). 썸네일 이미지는 `storeMediaFile`로 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg`로 복사하고, `Thumbnail` 필드에 `<img>` 태그로 넣는다. 썸네일 클릭 시 YouTube 원본 시점으로 이동.
@@ -182,7 +182,7 @@ LoopId는 노트 필드로 저장하지 않는다 (update 로직이 없으므로
 
 썸네일 클릭 = YouTube 원본 해당 시점으로 이동 (SourceUrl에 `t=` 파라미터 포함). 별도 텍스트 링크는 두지 않는다.
 
-카드 CSS는 음성 재생 버튼을 화면 하단에 고정하고 본문에 하단 여백을 둔다. 썸네일은 뒷면에서 최대 폭 280px로 제한한다. 현재 필드 구성이 일치하는 개발용 노트 타입은 Anki 전송 시 템플릿과 CSS를 최신 정의로 갱신한다.
+PhraseLoop가 노트 타입을 처음 만들 때 제공하는 기본 카드 CSS는 음성 재생 버튼을 화면 하단에 고정하고 본문에 하단 여백을 둔다. 썸네일은 최대 폭 280px로 제한한다. 노트 타입이 만들어진 뒤에는 카드 템플릿과 CSS를 Anki 사용자가 소유하며, PhraseLoop는 이를 수정하지 않고 필드 값만 채운다. 필드 순서와 사용자 추가 필드도 보존한다.
 
 연결 실패 시 데이터 손실 없이 안내하고, Anki와 AnkiConnect를 실행한 뒤 다시 시도할 수 있게 한다.
 
