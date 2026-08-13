@@ -87,7 +87,7 @@ describe("companion storage", () => {
     expect(second.item.captureHash).toBe(first.item.captureHash);
   });
 
-  it("invalidates review and Anki sync when capture boundaries change", async () => {
+  it("keeps the add-only Anki record when capture boundaries change", async () => {
     const dataDir = await makeDataDir();
     await initializeDataRoot(dataDir);
     await importCapture(dataDir, capture());
@@ -95,7 +95,7 @@ describe("companion storage", () => {
     const stored = JSON.parse(await readFile(itemPath, "utf8"));
     stored.transcript = "Where is Jane?";
     stored.review = { status: "ready", verifiedAt: "2026-08-12T00:00:00.000Z" };
-    stored.anki = { status: "synced", noteId: 123, contentHash: "old" };
+    stored.anki = { status: "synced", deckName: "English::PhraseLoop", noteId: 123, addedAt: "2026-08-12T00:00:00.000Z", contentHash: "old" };
     await atomicWriteJson(itemPath, stored);
 
     const changed = await importCapture(dataDir, capture({ end: 18.2 }));
@@ -103,7 +103,12 @@ describe("companion storage", () => {
     expect(changed.item.transcriptDraft).toBe("Where is Jane?");
     expect(changed.item.review).toEqual({ status: "needs_review", verifiedAt: null });
     expect(changed.item.processing.status).toBe("queued");
-    expect(changed.item.anki.status).toBe("out_of_sync");
+    expect(changed.item.anki).toEqual({
+      status: "added",
+      deckName: "English::PhraseLoop",
+      noteId: 123,
+      addedAt: "2026-08-12T00:00:00.000Z"
+    });
     expect((await getItem(dataDir, "video_123", "lp_test")).end).toBe(18.2);
   });
 

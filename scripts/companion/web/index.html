@@ -18,16 +18,16 @@
           </span>
         </div>
         <div class="filters" role="group" aria-label="Item status">
-          <button type="button" data-filter="all" class="is-active">All</button>
-          <button type="button" data-filter="needs_review">Needs review</button>
-          <button type="button" data-filter="synced">In Anki</button>
+          <button type="button" data-filter="not_added" class="is-active">To add</button>
+          <button type="button" data-filter="added">Added</button>
+          <button type="button" data-filter="all">All</button>
         </div>
         <p id="summary" class="muted"></p>
         <div id="itemList" class="item-list"></div>
       </aside>
 
       <section id="workspace" class="workspace">
-        <div class="empty-state">Select an imported loop.</div>
+        <div class="empty-state">Loading items...</div>
       </section>
     </main>
 

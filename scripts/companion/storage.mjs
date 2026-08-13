@@ -133,7 +133,7 @@ export async function importCapture(dataDir, rawCapture, now = new Date().toISOS
       review: changed
         ? { status: "needs_review", verifiedAt: null }
         : previous?.review ?? { status: "needs_review", verifiedAt: null },
-      anki: normalizeAnkiState(previous?.anki, changed || hasSourceMetadataChange(previous, capture)),
+      anki: normalizeAnkiState(previous?.anki),
       createdAt: previous?.createdAt ?? now,
       updatedAt: now
     };
@@ -212,10 +212,6 @@ export async function patchItem(dataDir, videoId, loopId, rawPatch, now = new Da
       item.review = { status: "needs_review", verifiedAt: null };
     }
 
-    if (hasAnkiContentChange(previous, item) && item.anki?.noteId) {
-      item.anki = { ...item.anki, status: "out_of_sync" };
-    }
-
     await atomicWriteJson(itemPath, item);
     await rebuildLibrary(dataDir);
     return item;
@@ -245,14 +241,14 @@ export async function updateProcessing(dataDir, videoId, loopId, processing, now
   });
 }
 
-export async function updateAnkiState(dataDir, videoId, loopId, anki, now = new Date().toISOString()) {
+export async function setAnkiState(dataDir, videoId, loopId, anki, now = new Date().toISOString()) {
   requiredSafeId(videoId, "videoId");
   requiredSafeId(loopId, "loopId");
   return enqueueMutation(dataDir, async () => {
     const itemPath = join(getLoopDir(dataDir, videoId, loopId), "item.json");
     const item = await readJsonIfExists(itemPath);
     if (!item) return null;
-    item.anki = { ...item.anki, ...anki };
+    item.anki = normalizeAnkiState(anki);
     item.updatedAt = now;
     await atomicWriteJson(itemPath, item);
     await rebuildLibrary(dataDir);
@@ -287,13 +283,15 @@ export async function atomicWriteJson(path, value) {
 
 export class InputError extends Error {}
 
-function normalizeAnkiState(previous, captureChanged) {
-  if (!previous || typeof previous !== "object") {
-    return { status: "not_added", deckName: "", noteId: null, addedAt: null, lastSyncedAt: null, contentHash: "" };
+function normalizeAnkiState(previous) {
+  if (!previous || typeof previous !== "object" || !Number.isFinite(previous.noteId)) {
+    return { status: "not_added", deckName: "", noteId: null, addedAt: null };
   }
   return {
-    ...previous,
-    status: captureChanged && previous.noteId ? "out_of_sync" : previous.status ?? (previous.noteId ? "synced" : "not_added")
+    status: "added",
+    deckName: typeof previous.deckName === "string" ? previous.deckName : "",
+    noteId: previous.noteId,
+    addedAt: typeof previous.addedAt === "string" ? previous.addedAt : null
   };
 }
 
@@ -309,7 +307,7 @@ function toLibraryItem(item) {
     captureHash: item.captureHash,
     processingStatus: item.processing?.status ?? "queued",
     reviewStatus: item.review?.status ?? "needs_review",
-    ankiStatus: item.anki?.status ?? "not_added",
+    ankiStatus: Number.isFinite(item.anki?.noteId) ? "added" : "not_added",
     updatedAt: item.updatedAt
   };
 }
@@ -370,18 +368,6 @@ function stringArray(value, field, maxItems, maxItemLength) {
     throw new InputError(`${field} is invalid.`);
   }
   return [...new Set(value.map((item) => item.trim()).filter(Boolean))];
-}
-
-function hasAnkiContentChange(previous, item) {
-  return ["transcript", "meaning", "notes"].some((field) => previous[field] !== item[field]) ||
-    JSON.stringify(previous.tags ?? []) !== JSON.stringify(item.tags ?? []);
-}
-
-function hasSourceMetadataChange(previous, capture) {
-  if (!previous) return false;
-  return previous.sourceTitle !== capture.sourceTitle ||
-    previous.sourceUrl !== capture.sourceUrl ||
-    previous.channelTitle !== capture.channelTitle;
 }
 
 async function readDiscarded(dataDir) {

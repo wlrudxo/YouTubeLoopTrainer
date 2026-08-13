@@ -1,16 +1,17 @@
-const state = { items: [], selected: null, filter: "all" };
+const state = { items: [], selected: null, filter: "not_added" };
 const list = document.querySelector("#itemList");
 const summary = document.querySelector("#summary");
 const workspace = document.querySelector("#workspace");
 const template = document.querySelector("#workspaceTemplate");
 
-document.querySelector("#refreshButton").addEventListener("click", loadItems);
+document.querySelector("#refreshButton").addEventListener("click", () => void loadItems({ selectFirst: true }));
 for (const button of document.querySelectorAll("[data-filter]")) {
   button.addEventListener("click", () => {
     state.filter = button.dataset.filter;
     document.querySelector("[data-filter].is-active")?.classList.remove("is-active");
     button.classList.add("is-active");
     renderList();
+    void selectFirstVisibleItem();
   });
 }
 
@@ -39,15 +40,20 @@ async function checkAnkiStatus() {
 }
 window.setInterval(checkAnkiStatus, 30_000);
 
-void loadItems();
+void loadItems({ selectFirst: true });
 
-async function loadItems() {
+async function loadItems({ selectFirst = false } = {}) {
   void checkAnkiStatus();
   try {
     const data = await api("/api/items");
     state.items = data.items;
     renderList();
-    if (state.selected) await selectItem(state.selected.videoId, state.selected.loopId);
+    const selectedStillExists = state.selected && state.items.some((item) => sameItem(item, state.selected));
+    if (selectedStillExists) {
+      await selectItem(state.selected.videoId, state.selected.loopId);
+    } else if (selectFirst) {
+      await selectFirstVisibleItem();
+    }
   } catch (error) {
     summary.textContent = error.message;
   }
@@ -96,8 +102,18 @@ function renderList() {
 
 function matchesFilter(item) {
   if (state.filter === "all") return true;
-  if (state.filter === "synced") return item.ankiStatus === "synced";
-  return item.ankiStatus !== "synced";
+  return item.ankiStatus === state.filter;
+}
+
+async function selectFirstVisibleItem() {
+  state.selected = null;
+  const first = state.items.find(matchesFilter);
+  if (first) {
+    await selectItem(first.videoId, first.loopId);
+    return;
+  }
+  renderList();
+  workspace.innerHTML = `<div class="empty-state">${state.filter === "not_added" ? "All caught up." : "No items in this view."}</div>`;
 }
 
 async function selectItem(videoId, loopId) {
@@ -156,8 +172,7 @@ function renderWorkspace(item) {
     try {
       await api(`/api/items/${item.videoId}/${item.loopId}`, { method: "DELETE" });
       state.selected = null;
-      workspace.innerHTML = '<div class="empty-state">Item discarded.</div>';
-      await loadItems();
+      await loadItems({ selectFirst: true });
     } catch (error) {
       showMessage(root, error.message, true);
     }
@@ -170,11 +185,9 @@ function renderWorkspace(item) {
     try {
       ankiButton.disabled = true;
       await saveFields(root, item);
-      const result = await api(`/api/items/${item.videoId}/${item.loopId}/anki`, { method: "POST" });
-      showMessage(root, `Added to Anki (note ${result.noteId}).`);
-      ankiButton.textContent = "Added ✓";
-      ankiButton.disabled = false;
-      window.setTimeout(loadItems, 1500);
+      await api(`/api/items/${item.videoId}/${item.loopId}/anki`, { method: "POST" });
+      state.selected = null;
+      await loadItems({ selectFirst: true });
     } catch (error) {
       showMessage(root, error.message, true);
       ankiButton.disabled = false;
@@ -209,6 +222,7 @@ function role(root, name) { return root.querySelector(`[data-role="${name}"]`); 
 function action(root, name, handler) { root.querySelector(`[data-action="${name}"]`).addEventListener("click", handler); }
 function setText(root, name, value) { role(root, name).textContent = value; }
 function showMessage(root, text, error = false) { const el = role(root, "message"); el.textContent = text; el.classList.toggle("is-error", error); }
+function sameItem(left, right) { return left.videoId === right.videoId && left.loopId === right.loopId; }
 function formatRange(start, end) { return `${formatTime(start)}–${formatTime(end)}`; }
 function formatTime(value) { const minutes = Math.floor(value / 60); const seconds = value - minutes * 60; return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`; }
 function localImage(src, className) { const img = document.createElement("img"); img.src = src; img.alt = ""; img.className = className; img.addEventListener("error", () => img.remove()); return img; }

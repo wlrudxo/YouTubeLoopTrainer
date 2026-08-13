@@ -74,7 +74,7 @@ describe("Anki sync", () => {
     expect(add.params.note.fields.SourceUrl).toContain("t=1s");
     expect(add.params.note.fields.Thumbnail).toContain("phraseloop_thumb_video_anki.jpg");
     expect(add.params.note.tags).toContain("conversation");
-    expect((await getItem(dataDir, "video_anki", "lp_anki")).anki.status).toBe("synced");
+    expect((await getItem(dataDir, "video_anki", "lp_anki")).anki.status).toBe("added");
   });
 
   it("always adds a new note, even when the item was added before", async () => {
@@ -119,7 +119,7 @@ describe("Anki sync", () => {
     expect(result).toMatchObject({ noteId: 789 });
     const item = await getItem(dataDir, "video_anki", "lp_anki");
     expect(item.review.status).toBe("ready");
-    expect(item.anki.status).toBe("synced");
+    expect(item.anki.status).toBe("added");
   });
 
   it("rejects items without a saved transcript", async () => {

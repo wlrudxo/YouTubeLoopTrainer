@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getItem, InputError, patchItem, updateAnkiState } from "./storage.mjs";
+import { getItem, InputError, patchItem, setAnkiState } from "./storage.mjs";
 
 const MODEL_NAME = "PhraseLoop Dictation";
 const MODEL_FIELDS = ["Transcript", "Audio", "Meaning", "Notes", "Thumbnail", "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"];
@@ -38,17 +37,14 @@ export async function syncItemToAnki(dataDir, videoId, loopId, config, options =
   if (!Number.isFinite(noteId)) throw new Error("Anki did not return a note ID.");
 
   const now = new Date().toISOString();
-  const contentHash = calculateContentHash(item, audio);
   if (item.review?.status !== "ready") {
     await patchItem(dataDir, videoId, loopId, { reviewStatus: "ready" }, now);
   }
-  const updated = await updateAnkiState(dataDir, videoId, loopId, {
-    status: "synced",
+  const updated = await setAnkiState(dataDir, videoId, loopId, {
+    status: "added",
     deckName,
     noteId,
-    addedAt: item.anki?.addedAt ?? now,
-    lastSyncedAt: now,
-    contentHash
+    addedAt: now
   }, now);
   return { item: updated, noteId };
 }
@@ -111,23 +107,6 @@ function buildTags(item) {
 
 function safeTag(value) {
   return String(value).trim().replace(/\s+/g, "_").replace(/[^\p{L}\p{N}_:-]/gu, "");
-}
-
-function calculateContentHash(item, audio) {
-  const hash = createHash("sha256");
-  hash.update(audio);
-  hash.update(JSON.stringify({
-    transcript: item.transcript,
-    meaning: item.meaning,
-    notes: item.notes,
-    tags: item.tags,
-    sourceTitle: item.sourceTitle,
-    channelTitle: item.channelTitle,
-    sourceUrl: item.sourceUrl,
-    start: item.start,
-    end: item.end
-  }));
-  return `sha256:${hash.digest("hex")}`;
 }
 
 function frontTemplate() {
