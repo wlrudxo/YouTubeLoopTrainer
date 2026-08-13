@@ -121,49 +121,7 @@ npm run companion
 
 On first run, copy the token printed by the command (or read it from `PhraseLoopData/config.json`). In the extension Settings page, enter the token under **Local Dictation Companion** and click **Save & Connect**. Saved YouTube loops are then sent automatically; failed sends stay in the popup queue.
 
-Open `http://127.0.0.1:17311` to practice dictation, correct the captured caption draft, add an optional meaning, notes, and tags, then mark the transcript reviewed. Discarded items stay tombstoned and are not recreated by later imports. Reviewed items can be added directly to the `English::PhraseLoop` Anki deck; sending the same LoopId again updates the existing note. The Anki card plays only the audio on the front and shows the transcript, optional meaning, notes, local thumbnail, and source details on the back. All source metadata, review data, and generated media remain in the local `PhraseLoopData` folder.
-
-## Anki Media Export CLI (legacy fallback)
-
-This is a legacy path from before the companion existed. Prefer the companion's built-in Anki integration; use this only if you have an old `PhraseLoopAnkiExport` JSON file.
-
-Requirements:
-
-```powershell
-winget install yt-dlp.yt-dlp
-winget install Gyan.FFmpeg
-```
-
-Run the local generator against an exported Anki JSON file. By default it downloads only each loop section, which is best for long videos and many short clips:
-
-```powershell
-node scripts/export-anki.mjs "$env:USERPROFILE\Downloads\phraseloop-anki-YYYY-MM-DD.json" "$env:USERPROFILE\Desktop\phraseloop-anki"
-```
-
-The output folder contains:
-
-```text
-phraseloop-anki/
-  phraseloop-anki.csv
-  media/
-    lp_....mp3
-```
-
-Import `phraseloop-anki.csv` into Anki and copy the files from `media/` into your Anki collection media folder. The CSV uses `[sound:...]` references for each loop.
-
-Optional video clips:
-
-```powershell
-node scripts/export-anki.mjs .\phraseloop-anki.json .\anki-export --media video
-```
-
-Optional source caching mode:
-
-```powershell
-node scripts/export-anki.mjs .\phraseloop-anki.json .\anki-export --cache-source
-```
-
-This downloads each source video/audio once and cuts clips locally. It is usually less efficient for very long videos spread across many sources.
+Open `http://127.0.0.1:17311` to practice dictation, correct the captured caption draft, and add optional meaning, notes, and tags. Discarded items stay tombstoned and are not recreated by later imports. Items can be added directly to the `English::PhraseLoop` Anki deck. Anki export is add-only: clicking **Added ✓** again creates another note. The card plays only the audio on the front and shows the transcript, optional meaning, notes, local thumbnail, and source details on the back. All source metadata, review data, and generated media remain in the local `PhraseLoopData` folder.
 
 ## Current Scope
 

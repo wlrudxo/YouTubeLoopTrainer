@@ -1,4 +1,4 @@
-export type SchemaVersion = 1;
+type SchemaVersion = 1;
 
 export type Loop = {
   id: string;

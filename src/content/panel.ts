@@ -1,4 +1,3 @@
-import { APP_BUILD } from "../shared/constants";
 import { formatTime } from "../shared/time";
 import type { DraftLoop } from "../shared/types";
 import { validateDraftMarkers } from "../shared/validation";
@@ -29,6 +28,7 @@ export type PanelActions = {
 
 const PANEL_ID = "phraseloop-panel";
 const LABEL_INPUT_CLASS = "phraseloop-label-input";
+const APP_VERSION = chrome.runtime.getManifest().version;
 
 export class PhraseLoopPanel {
   private root: HTMLDivElement;
@@ -85,7 +85,7 @@ export class PhraseLoopPanel {
     this.root.className = `phraseloop-panel${collapsed ? " is-collapsed" : ""}`;
 
     const header = element("div", "phraseloop-header");
-    header.append(element("div", "phraseloop-title", `PhraseLoop ${APP_BUILD}`));
+    header.append(element("div", "phraseloop-title", `PhraseLoop · v${APP_VERSION}`));
 
     const headerActions = element("div", "phraseloop-header-actions");
     const copyCaptionButton = button("CC", "Copy visible caption");

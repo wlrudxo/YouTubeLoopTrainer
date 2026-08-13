@@ -1,19 +1,14 @@
 {
   "name": "phraseloop",
   "version": "0.3.0",
-  "description": "A Chrome Extension for saving and replaying multiple A-B loops on YouTube.",
+  "description": "Capture YouTube A-B loops and send them to a local dictation companion.",
   "type": "module",
-  "directories": {
-    "doc": "docs"
-  },
   "scripts": {
     "build": "vite build && node scripts/build-content.mjs && node scripts/copy-manifest.mjs",
     "companion": "node scripts/companion/server.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": [],
-  "author": "",
   "license": "MIT",
   "devDependencies": {
     "@types/chrome": "^0.1.42",

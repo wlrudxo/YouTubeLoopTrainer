@@ -112,6 +112,11 @@ describe("companion storage", () => {
     expect(() => validateImportPayload(capture({ url: "file:///secret" }))).toThrow(/http/);
   });
 
+  it("requires the current title and url import fields", () => {
+    const { title, url, ...withoutCurrentFields } = capture();
+    expect(() => validateImportPayload({ ...withoutCurrentFields, sourceTitle: title, sourceUrl: url })).toThrow(/url/);
+  });
+
   it("uses normalized millisecond boundaries in capture hashes", () => {
     const first = validateImportPayload(capture({ start: 12.3001 }));
     const second = validateImportPayload(capture({ start: 12.3002 }));

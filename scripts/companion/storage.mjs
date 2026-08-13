@@ -64,8 +64,8 @@ export function validateImportPayload(value) {
     start,
     end,
     label: optionalString(value.label, "label", 1000),
-    sourceTitle: optionalString(value.title ?? value.sourceTitle, "title", 1000),
-    sourceUrl: requiredHttpUrl(value.url ?? value.sourceUrl, "url"),
+    sourceTitle: optionalString(value.title, "title", 1000),
+    sourceUrl: requiredHttpUrl(value.url, "url"),
     channelTitle: optionalString(value.channelTitle, "channelTitle", 500),
     channelAvatarUrl: optionalAssetUrl(value.channelAvatarUrl, "channelAvatarUrl")
   };

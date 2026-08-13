@@ -1,4 +1,4 @@
-export type ShortcutHandlers = {
+type ShortcutHandlers = {
   setA: () => void;
   setB: () => void;
   save: () => void;
@@ -38,7 +38,7 @@ export function registerShortcuts(handlers: ShortcutHandlers): () => void {
   return () => document.removeEventListener("keydown", onKeyDown);
 }
 
-export function isTypingTarget(target: EventTarget | null): boolean {
+function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
 
   const tag = target.tagName.toLowerCase();

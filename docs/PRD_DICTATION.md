@@ -49,7 +49,7 @@ Anki 추가 API는 `processing=complete`, `review=ready`, 비어 있지 않은 t
 - 인증: 서버 최초 실행 시 `PhraseLoopData/config.json`에 랜덤 토큰 생성. 확장 설정 페이지에 사용자가 붙여넣고 `Save & Connect`로 현재 확장 origin을 페어링한다. 이후 요청 헤더로 토큰을 검증하며 CORS는 페어링된 확장 origin으로 제한한다.
 - 하는 일:
   1. 확장에서 구간 정보 수신 (`POST /import`)
-  2. yt-dlp/ffmpeg로 구간별 MP3 생성 (기존 `scripts/export-anki.mjs`의 섹션 다운로드 로직 재사용 가능)
+  2. yt-dlp/ffmpeg로 구간별 MP3 생성
   3. Dictation 웹 화면(정적 HTML/JS) 서빙
   4. AnkiConnect(127.0.0.1:8765) 호출
 
@@ -122,7 +122,7 @@ PhraseLoopData/
 | `PATCH /api/items/:videoId/:loopId` | transcript·meaning·notes·tags·review 상태 수정(allowlist) |
 | `DELETE /api/items/:videoId/:loopId` | 아이템 버리기 (쉬워서 Anki에 안 넣을 항목 정리). loopId를 tombstone 목록에 기록 |
 | `POST /api/items/:videoId/:loopId/process` | MP3 생성 또는 실패 작업 재시도 |
-| `POST /api/items/:videoId/:loopId/anki` | Anki에 추가 또는 업데이트 |
+| `POST /api/items/:videoId/:loopId/anki` | Anki에 새 노트 추가 |
 | `GET /media/...` | mp3 서빙 |
 | `GET /` | Dictation 웹앱 |
 
@@ -184,7 +184,7 @@ LoopId는 노트 필드로 저장하지 않는다 (update 로직이 없으므로
 
 카드 CSS는 음성 재생 버튼을 화면 하단에 고정하고 본문에 하단 여백을 둔다. 썸네일은 뒷면에서 최대 폭 280px로 제한한다. 현재 필드 구성이 일치하는 개발용 노트 타입은 Anki 전송 시 템플릿과 CSS를 최신 정의로 갱신한다.
 
-연결 실패 시: 데이터 손실 없이 안내 메시지 + `[다시 연결]` `[Anki CSV로 내보내기]`. 기존 `scripts/export-anki.mjs` CSV 워크플로는 fallback으로 유지한다.
+연결 실패 시 데이터 손실 없이 안내하고, Anki와 AnkiConnect를 실행한 뒤 다시 시도할 수 있게 한다.
 
 ## 8. 구현 우선순위
 
@@ -193,8 +193,7 @@ LoopId는 노트 필드로 저장하지 않는다 (update 로직이 없으므로
 3. 확장의 "로컬로 가져오기" 버튼 + 설정(URL/토큰) + 미전송 일괄 전송
 4. Dictation/검수 웹 화면 (받아쓰기 채점, 스크립트 교정, 추가/버리기 판정)
 5. AnkiConnect 연결 및 노트 타입 자동 생성
-6. 단건/선택/ready 전체 Anki 추가 + 업데이트(멱등)
-7. CSV 내보내기 fallback 유지 확인
+6. 검수 화면에서 단건 Anki 추가
 
 각 단계는 완료 시점에 단독으로 사용 가능해야 한다.
 
@@ -206,12 +205,12 @@ LoopId는 노트 필드로 저장하지 않는다 (update 로직이 없으므로
 - CEFR 자동 판정, 번역, 클라우드 동기화
 - 로컬 앱 내 간격 반복/학습 통계
 - 문장 단위 자동 분할 (구간 하나 = 카드 하나; 긴 구간은 확장에서 애초에 짧게 자르는 것으로 해결)
-- .apkg 생성 (AnkiConnect + CSV fallback으로 충분)
+- .apkg 및 CSV 생성 (AnkiConnect 직접 연동으로 충분)
 - 영상(mp4)·장면 캡처 저장 — 미디어는 mp3만. 받아쓰기는 청취 훈련이라 영상은 힌트로 작동해 오히려 방해되고, 용량도 mp3의 3~20배. 장면 확인은 카드의 SourceUrl + Start로 YouTube 원본 시점 이동으로 대체. (필요 시 향후 "시작 프레임 1장 캡처" 옵션으로 검토)
 
 ## 10. 성공 기준
 
 - YouTube에서 구간 선택 → 버튼 1번 → 정상 네트워크의 일반 영상에서 30초 내 받아쓰기 가능을 목표로 하며, 처리 진행과 재시도 상태가 항상 표시됨
 - 검수 없이 Anki로 들어가는 카드가 구조적으로 존재하지 않음
-- 같은 구간을 두 번 추가해도 Anki에 중복 노트가 생기지 않음
+- 같은 loopId를 다시 가져와도 로컬 아이템이 중복 생성되지 않음
 - `PhraseLoopData/` 폴더만 복사하면 전체 백업 완료

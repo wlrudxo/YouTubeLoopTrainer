@@ -2,18 +2,15 @@
   "manifest_version": 3,
   "name": "PhraseLoop",
   "version": "0.3.0",
-  "description": "Save and replay multiple A-B loops on YouTube for listening and shadowing practice.",
+  "description": "Capture YouTube A-B loops and send them to the local PhraseLoop companion.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "permissions": ["storage", "unlimitedStorage"],
-  "host_permissions": ["https://www.youtube.com/*", "http://127.0.0.1/*"],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: https://yt3.ggpht.com https://*.googleusercontent.com;"
-  },
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*"],
   "action": {
     "default_popup": "popup/index.html",
     "default_icon": {

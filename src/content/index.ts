@@ -1,7 +1,6 @@
 import { createLoopId } from "../shared/ids";
 import { resolveLoopLabel } from "../shared/labels";
 import * as storage from "../shared/storage";
-import { APP_BUILD } from "../shared/constants";
 import { getVisibleCaptionText } from "../shared/captions";
 import { formatRangeLabel } from "../shared/time";
 import type { DraftLoop, Loop, VideoLoops } from "../shared/types";
@@ -59,7 +58,7 @@ void boot();
 
 async function boot(): Promise<void> {
   debug.subscribe(render);
-  debug.log("app", "boot", { build: APP_BUILD });
+  debug.log("app", "boot", { version: chrome.runtime.getManifest().version });
 
   loopEngine = new LoopEngine(() => {
     render();

@@ -189,7 +189,7 @@ export async function createCompanionServer(options = {}) {
   return { server, dataDir, config, initialized };
 }
 
-export async function startCompanion(options = {}) {
+async function startCompanion(options = {}) {
   const companion = await createCompanionServer(options);
   const port = options.port ?? companion.config.port;
   await new Promise((resolveListen, rejectListen) => {

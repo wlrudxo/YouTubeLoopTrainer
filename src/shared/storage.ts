@@ -2,7 +2,7 @@ import { SCHEMA_VERSION, STORAGE_KEY } from "./constants";
 import { createEmptyData, type VideoMetadata } from "./data";
 import type { Loop, PhraseLoopData, VideoLoops } from "./types";
 
-export class PhraseLoopStorageError extends Error {
+class PhraseLoopStorageError extends Error {
   constructor(message = "Stored PhraseLoop data is invalid.") {
     super(message);
     this.name = "PhraseLoopStorageError";
@@ -25,7 +25,7 @@ export async function readData(): Promise<PhraseLoopData> {
   return parsed;
 }
 
-export async function writeData(data: PhraseLoopData): Promise<void> {
+async function writeData(data: PhraseLoopData): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: data });
 }
 
