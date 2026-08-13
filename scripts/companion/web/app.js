@@ -10,7 +10,6 @@ for (const button of document.querySelectorAll("[data-filter]")) {
     state.filter = button.dataset.filter;
     document.querySelector("[data-filter].is-active")?.classList.remove("is-active");
     button.classList.add("is-active");
-    renderList();
     void selectFirstVisibleItem();
   });
 }
@@ -47,12 +46,13 @@ async function loadItems({ selectFirst = false } = {}) {
   try {
     const data = await api("/api/items");
     state.items = data.items;
-    renderList();
     const selectedStillExists = state.selected && state.items.some((item) => sameItem(item, state.selected));
     if (selectedStillExists) {
       await selectItem(state.selected.videoId, state.selected.loopId);
     } else if (selectFirst) {
       await selectFirstVisibleItem();
+    } else {
+      renderList();
     }
   } catch (error) {
     summary.textContent = error.message;
@@ -91,7 +91,7 @@ function renderList() {
       const label = document.createElement("strong");
       label.textContent = item.label || "Untitled loop";
       const meta = document.createElement("span");
-      meta.textContent = `${item.processingStatus} · ${item.reviewStatus} · ${formatRange(item.start, item.end)}`;
+      meta.textContent = `${item.processingStatus} · ${formatRange(item.start, item.end)}`;
       button.append(label, meta);
       button.addEventListener("click", () => selectItem(item.videoId, item.loopId));
       group.append(button);
@@ -137,7 +137,7 @@ function renderWorkspace(item) {
   avatar.src = `/media/${item.videoId}/channel.jpg`;
   avatar.addEventListener("error", () => avatar.remove());
   setText(root, "title", item.label || item.transcriptDraft || "Untitled loop");
-  setText(root, "status", `${item.processing.status} / ${item.review.status}`);
+  setText(root, "status", item.processing.status);
   setText(root, "processing", item.processing.error || "");
 
   const audio = role(root, "audio");

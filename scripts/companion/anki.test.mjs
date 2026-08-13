@@ -8,7 +8,7 @@ import { getItem, importCapture, initializeDataRoot, patchItem, updateProcessing
 const tempDirs = [];
 afterEach(async () => Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true }))));
 
-async function readyItem() {
+async function testItem() {
   const dataDir = await mkdtemp(join(tmpdir(), "phraseloop-anki-"));
   tempDirs.push(dataDir);
   const { config } = await initializeDataRoot(dataDir);
@@ -27,8 +27,7 @@ async function readyItem() {
   await patchItem(dataDir, "video_anki", "lp_anki", {
     transcript: "Where is Jane?",
     meaning: "제인은 어디 있나요?",
-    tags: ["conversation"],
-    reviewStatus: "ready"
+    tags: ["conversation"]
   });
   return { dataDir, config };
 }
@@ -55,7 +54,7 @@ function fakeAnki({ modelExists = false, modelFields = null } = {}) {
 
 describe("Anki sync", () => {
   it("creates missing deck/model and adds a reviewed item", async () => {
-    const { dataDir, config } = await readyItem();
+    const { dataDir, config } = await testItem();
     const anki = fakeAnki();
     const result = await syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: anki.invoke });
     expect(result).toMatchObject({ noteId: 789 });
@@ -78,7 +77,7 @@ describe("Anki sync", () => {
   });
 
   it("always adds a new note, even when the item was added before", async () => {
-    const { dataDir, config } = await readyItem();
+    const { dataDir, config } = await testItem();
     const first = fakeAnki();
     await syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: first.invoke });
     const second = fakeAnki();
@@ -90,7 +89,7 @@ describe("Anki sync", () => {
   });
 
   it("preserves templates, styling, field order, and extra fields on an existing model", async () => {
-    const { dataDir, config } = await readyItem();
+    const { dataDir, config } = await testItem();
     const anki = fakeAnki({
       modelExists: true,
       modelFields: [
@@ -105,26 +104,16 @@ describe("Anki sync", () => {
   });
 
   it("reports required fields missing from an existing model", async () => {
-    const { dataDir, config } = await readyItem();
+    const { dataDir, config } = await testItem();
     const anki = fakeAnki({ modelExists: true, modelFields: ["Transcript", "Audio"] });
     await expect(syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: anki.invoke }))
       .rejects.toThrow(/Meaning.*Notes.*Thumbnail.*SourceTitle.*ChannelTitle.*SourceUrl.*Start.*End/);
     expect(anki.calls.some((call) => call.action === "addNote")).toBe(false);
   });
 
-  it("adds an unreviewed item and marks it ready", async () => {
-    const { dataDir, config } = await readyItem();
-    await patchItem(dataDir, "video_anki", "lp_anki", { reviewStatus: "needs_review" });
-    const result = await syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: fakeAnki().invoke });
-    expect(result).toMatchObject({ noteId: 789 });
-    const item = await getItem(dataDir, "video_anki", "lp_anki");
-    expect(item.review.status).toBe("ready");
-    expect(item.anki.status).toBe("added");
-  });
-
   it("rejects items without a saved transcript", async () => {
-    const { dataDir, config } = await readyItem();
-    await patchItem(dataDir, "video_anki", "lp_anki", { transcript: "", reviewStatus: "needs_review" });
+    const { dataDir, config } = await testItem();
+    await patchItem(dataDir, "video_anki", "lp_anki", { transcript: "" });
     await expect(syncItemToAnki(dataDir, "video_anki", "lp_anki", config, { invoke: fakeAnki().invoke })).rejects.toThrow(/transcript/);
   });
 });

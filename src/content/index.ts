@@ -54,9 +54,9 @@ let labelRefreshToken = 0;
 let captionCollector: VisibleCaptionCollector | null = null;
 let collectedCaptionLabel = "";
 
-void boot();
+boot();
 
-async function boot(): Promise<void> {
+function boot(): void {
   debug.subscribe(render);
   debug.log("app", "boot", { version: chrome.runtime.getManifest().version });
 
@@ -166,7 +166,7 @@ function setA(): void {
   collectedCaptionLabel = "";
   captionCollector?.start();
   debug.log("draft", "set markerA", { currentTime: video.currentTime, resetDraft: true });
-  void refreshDefaultLabel();
+  refreshDefaultLabel();
   setMessage("");
   render();
 }
@@ -198,7 +198,7 @@ function setB(): void {
     state.draft.trimContextStart = Math.max(0, validation.start - 3);
     state.draft.trimContextEnd = validation.end + 3;
   }
-  void refreshDefaultLabel();
+  refreshDefaultLabel();
   setMessage("");
   render();
 }
@@ -228,7 +228,7 @@ function updateDraftLabel(label: string): void {
 function updateDraftRange(start: number, end: number): void {
   state.draft.markerA = roundToTenth(start);
   state.draft.markerB = roundToTenth(end);
-  void refreshDefaultLabel();
+  refreshDefaultLabel();
   syncActiveDraftLoop();
   render();
 }
@@ -361,7 +361,7 @@ function setDebugExpanded(expanded: boolean): void {
   render();
 }
 
-async function refreshDefaultLabel(): Promise<void> {
+function refreshDefaultLabel(): void {
   if (state.draft.labelDirty) {
     debug.log("label", "skip auto label because draft label is dirty");
     return;

@@ -21,24 +21,20 @@
 
 ## 3. 아이템 상태 흐름
 
-처리·검수·Anki 추가 상태를 분리한다. 하나의 상태 값으로 세 상태를 겸하면
-실패 재시도와 재가져오기를 안전하게 표현할 수 없다.
+처리 상태와 Anki 추가 여부만 저장한다. 검수는 별도 상태가 아니라 사용자가 필드를 확인한 뒤
+Anki에 추가하거나 버리는 행위 자체다.
 
 ```
 processing: queued → processing → complete
                          └──────→ error → queued(retry)
-review:     needs_review → ready
 anki:       not_added → added
 ```
 
 - `processing`: MP3 생성 작업 상태
-- `review.needs_review`: 사용자가 canonical transcript를 아직 확정하지 않음
-- `review.ready`: canonical transcript를 확정하고 `verifiedAt` 보유
 - `anki.added`: Anki에 새 노트를 추가한 적이 있으며 마지막 noteId와 추가 시각을 보유
 
 Anki 추가 API는 `processing=complete`, 비어 있지 않은 transcript, 존재하는 MP3를
-서버에서 검증한다. 추가 성공 시 현재 transcript를 검수 완료로 보고 `review=ready`로 기록한다.
-UI 비활성화만으로 이 규칙을 대신하지 않는다.
+서버에서 검증한다. UI 비활성화만으로 이 규칙을 대신하지 않는다.
 
 ## 4. 아키텍처
 
@@ -62,7 +58,6 @@ UI 비활성화만으로 이 규칙을 대신하지 않는다.
 ```
 PhraseLoopData/
   config.json            # 포트, 토큰, Anki 덱 이름 등
-  library.json           # 전체 아이템 인덱스 (목록 화면용 캐시)
   videos/
     VIDEO_ID/
       source.json        # 영상 제목, 채널명, URL
@@ -83,7 +78,6 @@ PhraseLoopData/
   "start": 72.4, "end": 78.9,
   "captureHash": "sha256:...",
   "processing": { "status": "complete", "error": null, "attempts": 1 },
-  "review": { "status": "needs_review", "verifiedAt": null },
   "transcript": "검수 후 확정된 canonical 문장",
   "transcriptDraft": "확장이 수집한 화면 자막 label (초안)",
   "meaning": "",
@@ -118,7 +112,7 @@ PhraseLoopData/
 | `POST /import` | 구간 수신 → 폴더 생성 → MP3 추출 시작 + 영상 썸네일·채널 아바타 최초 1회 다운로드 (idempotent: 같은 loopId 재수신 시 갱신) |
 | `GET /api/items` | 아이템 목록 (상태 필터) |
 | `GET /api/items/:videoId/:loopId` | 아이템 조회 |
-| `PATCH /api/items/:videoId/:loopId` | transcript·meaning·notes·tags·review 상태 수정(allowlist) |
+| `PATCH /api/items/:videoId/:loopId` | transcript·meaning·notes·tags 수정(allowlist) |
 | `DELETE /api/items/:videoId/:loopId` | 아이템 버리기 (쉬워서 Anki에 안 넣을 항목 정리). loopId를 tombstone 목록에 기록 |
 | `POST /api/items/:videoId/:loopId/process` | MP3 생성 또는 실패 작업 재시도 |
 | `POST /api/items/:videoId/:loopId/anki` | Anki에 새 노트 추가 |
@@ -149,7 +143,7 @@ PhraseLoopData/
 ## 7. Anki 연동 (AnkiConnect)
 
 - AnkiConnect 애드온(코드 2055492159, FooSoft) 사용, `127.0.0.1:8765`. Anki 데스크톱 실행 중이어야 함.
-- "Anki에 추가" 동작 순서: 서버 게이트 확인(MP3 완료 + 비어 있지 않은 transcript) → `version` 연결 확인 → `deckNames`/`createDeck` → "PhraseLoop Dictation" 노트 타입이 없으면 기본 필드·템플릿·CSS로 `createModel`, 이미 있으면 필수 필드의 존재만 검증 → `storeMediaFile`로 `phraseloop_LOOP_ID.mp3` 및 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg` 복사 → `addNote`(allowDuplicate) → 마지막 noteId와 추가 시각을 item.json에 저장, `anki.status=added`, review는 자동으로 `ready` 처리.
+- "Anki에 추가" 동작 순서: 서버 게이트 확인(MP3 완료 + 비어 있지 않은 transcript) → `version` 연결 확인 → `deckNames`/`createDeck` → "PhraseLoop Dictation" 노트 타입이 없으면 기본 필드·템플릿·CSS로 `createModel`, 이미 있으면 필수 필드의 존재만 검증 → `storeMediaFile`로 `phraseloop_LOOP_ID.mp3` 및 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg` 복사 → `addNote`(allowDuplicate) → 마지막 noteId와 추가 시각을 item.json에 저장, `anki.status=added` 처리.
 - **Add 전용 (Yomitan 방식, update 없음)**: 기존 노트 조회(`notesInfo`/`findNotes`)나 `updateNoteFields`는 사용하지 않는다 — Anki에서 사용자가 노트를 지웠을 때 조회가 에러를 내는 등 동기화 가정이 깨지기 쉽기 때문. 버튼은 추가 후 "Added ✓"로 표시되고, 다시 누르면 새 노트로 재추가된다. 수정이 필요하면 Anki에서 직접 고치거나, 지우고 다시 추가한다.
 - **카드는 타이핑 입력(`{{type:...}}`)을 사용하지 않는다.** 타이핑 훈련은 로컬 Dictation 앱에서 이미 수행했으므로, Anki에서는 듣기 → 머릿속 재구성 → 정답 확인 → 복습 버튼(Again/Hard/Good/Easy) 자가 평가로 진행한다. 모바일 복습이 수월해지고, 구간이 여러 문장이어도 카드로 쓸 수 있다.
 - 영상 썸네일은 **앞면과 뒷면 모두 맨 위에** 표시한다 (영상 맥락 상기가 힌트 우려보다 유용하다고 판단). 썸네일 이미지는 `storeMediaFile`로 영상당 1회 `phraseloop_thumb_VIDEO_ID.jpg`로 복사하고, `Thumbnail` 필드에 `<img>` 태그로 넣는다. 썸네일 클릭 시 YouTube 원본 시점으로 이동.

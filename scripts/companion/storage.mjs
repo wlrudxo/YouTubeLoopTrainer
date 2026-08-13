@@ -32,7 +32,6 @@ export async function initializeDataRoot(dataDir, requestedPort = 17311) {
   }
 
   validateConfig(config);
-  await rebuildLibrary(dataDir);
   return { config, created, configPath };
 }
 
@@ -130,16 +129,12 @@ export async function importCapture(dataDir, rawCapture, now = new Date().toISOS
       processing: changed
         ? { status: "queued", error: null, attempts: previous?.processing?.attempts ?? 0 }
         : previous?.processing ?? { status: "queued", error: null, attempts: 0 },
-      review: changed
-        ? { status: "needs_review", verifiedAt: null }
-        : previous?.review ?? { status: "needs_review", verifiedAt: null },
       anki: normalizeAnkiState(previous?.anki),
       createdAt: previous?.createdAt ?? now,
       updatedAt: now
     };
 
     await atomicWriteJson(itemPath, item);
-    await rebuildLibrary(dataDir);
     return { item, changed, created: !previous, discarded: false };
   });
 }
@@ -155,14 +150,23 @@ export async function discardItem(dataDir, videoId, loopId, now = new Date().toI
     discarded.updatedAt = now;
     await atomicWriteJson(join(dataDir, "discarded.json"), discarded);
     await rm(getLoopDir(dataDir, videoId, loopId), { recursive: true, force: true });
-    await rebuildLibrary(dataDir);
     return discarded.items[loopId];
   });
 }
 
 export async function listItems(dataDir) {
-  const library = (await readJsonIfExists(join(dataDir, "library.json"))) ?? { items: [] };
-  return Array.isArray(library.items) ? library.items : [];
+  const items = [];
+  const videosDir = join(dataDir, "videos");
+  for (const videoEntry of await safeReadDir(videosDir)) {
+    if (!videoEntry.isDirectory() || !SAFE_ID.test(videoEntry.name)) continue;
+    const loopsDir = join(videosDir, videoEntry.name, "loops");
+    for (const loopEntry of await safeReadDir(loopsDir)) {
+      if (!loopEntry.isDirectory() || !SAFE_ID.test(loopEntry.name)) continue;
+      const item = await readJsonIfExists(join(loopsDir, loopEntry.name, "item.json"));
+      if (item) items.push(toListItem(item));
+    }
+  }
+  return items.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 
 export async function getItem(dataDir, videoId, loopId) {
@@ -199,21 +203,12 @@ export async function patchItem(dataDir, videoId, loopId, rawPatch, now = new Da
       channelTitle: previous.channelTitle ?? "",
       channelAvatarUrl: previous.channelAvatarUrl ?? "",
       processing: previous.processing,
-      review: previous.review,
       anki: previous.anki,
       createdAt: previous.createdAt,
       updatedAt: now
     };
 
-    if (patch.reviewStatus === "ready") {
-      if (!item.transcript.trim()) throw new InputError("A non-empty transcript is required before review can be completed.");
-      item.review = { status: "ready", verifiedAt: now };
-    } else if (patch.reviewStatus === "needs_review") {
-      item.review = { status: "needs_review", verifiedAt: null };
-    }
-
     await atomicWriteJson(itemPath, item);
-    await rebuildLibrary(dataDir);
     return item;
   });
 }
@@ -236,7 +231,6 @@ export async function updateProcessing(dataDir, videoId, loopId, processing, now
     };
     item.updatedAt = now;
     await atomicWriteJson(itemPath, item);
-    await rebuildLibrary(dataDir);
     return item;
   });
 }
@@ -251,27 +245,8 @@ export async function setAnkiState(dataDir, videoId, loopId, anki, now = new Dat
     item.anki = normalizeAnkiState(anki);
     item.updatedAt = now;
     await atomicWriteJson(itemPath, item);
-    await rebuildLibrary(dataDir);
     return item;
   });
-}
-
-export async function rebuildLibrary(dataDir) {
-  const items = [];
-  const videosDir = join(dataDir, "videos");
-  for (const videoEntry of await safeReadDir(videosDir)) {
-    if (!videoEntry.isDirectory() || !SAFE_ID.test(videoEntry.name)) continue;
-    const loopsDir = join(videosDir, videoEntry.name, "loops");
-    for (const loopEntry of await safeReadDir(loopsDir)) {
-      if (!loopEntry.isDirectory() || !SAFE_ID.test(loopEntry.name)) continue;
-      const item = await readJsonIfExists(join(loopsDir, loopEntry.name, "item.json"));
-      if (item) items.push(toLibraryItem(item));
-    }
-  }
-  items.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
-  const library = { schemaVersion: 1, rebuiltAt: new Date().toISOString(), items };
-  await atomicWriteJson(join(dataDir, "library.json"), library);
-  return library;
 }
 
 export async function atomicWriteJson(path, value) {
@@ -295,7 +270,7 @@ function normalizeAnkiState(previous) {
   };
 }
 
-function toLibraryItem(item) {
+function toListItem(item) {
   return {
     loopId: item.loopId,
     videoId: item.videoId,
@@ -306,7 +281,6 @@ function toLibraryItem(item) {
     end: item.end,
     captureHash: item.captureHash,
     processingStatus: item.processing?.status ?? "queued",
-    reviewStatus: item.review?.status ?? "needs_review",
     ankiStatus: Number.isFinite(item.anki?.noteId) ? "added" : "not_added",
     updatedAt: item.updatedAt
   };
@@ -347,7 +321,7 @@ function enqueueMutation(key, operation) {
 
 function validateItemPatch(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new InputError("Patch body must be an object.");
-  const allowed = new Set(["transcript", "meaning", "notes", "tags", "reviewStatus"]);
+  const allowed = new Set(["transcript", "meaning", "notes", "tags"]);
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) throw new InputError(`${key} cannot be updated.`);
   }
@@ -357,10 +331,7 @@ function validateItemPatch(value) {
   if ("meaning" in value) fields.meaning = optionalString(value.meaning, "meaning", 20_000);
   if ("notes" in value) fields.notes = optionalString(value.notes, "notes", 20_000);
   if ("tags" in value) fields.tags = stringArray(value.tags, "tags", 50, 200);
-  if ("reviewStatus" in value && !["needs_review", "ready"].includes(value.reviewStatus)) {
-    throw new InputError("reviewStatus must be needs_review or ready.");
-  }
-  return { fields, reviewStatus: value.reviewStatus };
+  return { fields };
 }
 
 function stringArray(value, field, maxItems, maxItemLength) {

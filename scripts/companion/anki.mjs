@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getItem, InputError, patchItem, setAnkiState } from "./storage.mjs";
+import { getItem, InputError, setAnkiState } from "./storage.mjs";
 
 const MODEL_NAME = "PhraseLoop Dictation";
 const MODEL_FIELDS = ["Transcript", "Audio", "Meaning", "Notes", "Thumbnail", "SourceTitle", "ChannelTitle", "SourceUrl", "Start", "End"];
@@ -37,9 +37,6 @@ export async function syncItemToAnki(dataDir, videoId, loopId, config, options =
   if (!Number.isFinite(noteId)) throw new Error("Anki did not return a note ID.");
 
   const now = new Date().toISOString();
-  if (item.review?.status !== "ready") {
-    await patchItem(dataDir, videoId, loopId, { reviewStatus: "ready" }, now);
-  }
   const updated = await setAnkiState(dataDir, videoId, loopId, {
     status: "added",
     deckName,

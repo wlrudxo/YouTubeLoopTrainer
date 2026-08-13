@@ -8,7 +8,9 @@ import {
   getItem,
   importCapture,
   initializeDataRoot,
+  listItems,
   patchItem,
+  setAnkiState,
   discardItem,
   validateImportPayload
 } from "./storage.mjs";
@@ -50,21 +52,20 @@ describe("companion storage", () => {
     expect(first.config.token).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("only marks a non-empty reviewed transcript ready", async () => {
+  it("updates only editable review fields", async () => {
     const dataDir = await makeDataDir();
     await initializeDataRoot(dataDir);
     await importCapture(dataDir, capture());
 
-    await expect(patchItem(dataDir, "video_123", "lp_test", { reviewStatus: "ready" })).rejects.toThrow(/transcript/);
-    const ready = await patchItem(
+    const updated = await patchItem(
       dataDir,
       "video_123",
       "lp_test",
-      { transcript: "Where is Jane?", meaning: "제인은 어디 있나요?", tags: ["conversation"], reviewStatus: "ready" },
+      { transcript: "Where is Jane?", meaning: "제인은 어디 있나요?", tags: ["conversation"] },
       "2026-08-12T01:00:00.000Z"
     );
-    expect(ready.review).toEqual({ status: "ready", verifiedAt: "2026-08-12T01:00:00.000Z" });
-    expect(ready.meaning).toBe("제인은 어디 있나요?");
+    expect(updated.transcript).toBe("Where is Jane?");
+    expect(updated.meaning).toBe("제인은 어디 있나요?");
   });
 
   it("rejects patch fields outside the allowlist", async () => {
@@ -85,6 +86,23 @@ describe("companion storage", () => {
     expect(second.created).toBe(false);
     expect(second.changed).toBe(false);
     expect(second.item.captureHash).toBe(first.item.captureHash);
+    expect((await listItems(dataDir)).map((item) => item.loopId)).toEqual(["lp_test"]);
+  });
+
+  it("lists current item state directly from its source file", async () => {
+    const dataDir = await makeDataDir();
+    await initializeDataRoot(dataDir);
+    await importCapture(dataDir, capture());
+    await setAnkiState(dataDir, "video_123", "lp_test", {
+      status: "added",
+      deckName: "English::PhraseLoop",
+      noteId: 123,
+      addedAt: "2026-08-12T00:00:00.000Z"
+    });
+
+    expect(await listItems(dataDir)).toEqual([
+      expect.objectContaining({ loopId: "lp_test", ankiStatus: "added" })
+    ]);
   });
 
   it("keeps the add-only Anki record when capture boundaries change", async () => {
@@ -94,14 +112,12 @@ describe("companion storage", () => {
     const itemPath = join(dataDir, "videos", "video_123", "loops", "lp_test", "item.json");
     const stored = JSON.parse(await readFile(itemPath, "utf8"));
     stored.transcript = "Where is Jane?";
-    stored.review = { status: "ready", verifiedAt: "2026-08-12T00:00:00.000Z" };
     stored.anki = { status: "synced", deckName: "English::PhraseLoop", noteId: 123, addedAt: "2026-08-12T00:00:00.000Z", contentHash: "old" };
     await atomicWriteJson(itemPath, stored);
 
     const changed = await importCapture(dataDir, capture({ end: 18.2 }));
     expect(changed.item.transcript).toBe("Where is Jane?");
     expect(changed.item.transcriptDraft).toBe("Where is Jane?");
-    expect(changed.item.review).toEqual({ status: "needs_review", verifiedAt: null });
     expect(changed.item.processing.status).toBe("queued");
     expect(changed.item.anki).toEqual({
       status: "added",
