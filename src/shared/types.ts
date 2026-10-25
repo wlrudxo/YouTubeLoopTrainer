@@ -45,6 +45,6 @@ export type ValidatedLoopDraft =
     }
   | {
       ok: false;
-      error: "missing-a" | "missing-b" | "invalid-order" | "too-short";
+      error: "missing-a" | "missing-b" | "invalid-range" | "invalid-order" | "too-short";
       message: string;
     };

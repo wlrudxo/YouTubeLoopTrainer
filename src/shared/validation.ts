@@ -10,6 +10,10 @@ export function validateDraftMarkers(markerA: number | null, markerB: number | n
     return { ok: false, error: "missing-b", message: "Set marker B first." };
   }
 
+  if (!Number.isFinite(markerA) || !Number.isFinite(markerB) || markerA < 0 || markerB < 0) {
+    return { ok: false, error: "invalid-range", message: "Markers must be finite, non-negative media times." };
+  }
+
   const start = markerA;
   const end = markerB;
 
