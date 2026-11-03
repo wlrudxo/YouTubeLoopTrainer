@@ -31,7 +31,7 @@ Node 기본 `stripTypeScriptTypes`와 import hook으로 실제 `src/shared` 소�
 실제 실행 명령:
 
 ```powershell
-node --test C:\GitProject\_work\20261025_english_capture_range\regression.mjs
+npm test -- src/test/validation.test.ts src/test/capture-delivery.test.ts
 git -C C:\GitProject\AI_EnglishLearning diff --check
 ```
 
@@ -91,3 +91,5 @@ STATE·BACKLOG·공용 지침과 기능개발 종료 상태는 수정하지 않�
 - 격리 build의 manifest, content JS/CSS, popup HTML/JS, background JS, settings HTML 파일 존재를 확인했다. 확장 reload나 운영 실행은 하지 않았다.
 - `FR-6fb73d76b9ae65a858347529`를 이 격리 통과 증빙으로 resolved 처리했다. 기본 repo에 의존성을 설치한 것으로 기록하지 않았고 friction 원장은 커밋하지 않았다.
 - 남은 결정·검증 장애: 없음. 이 검증은 합성 fixture와 빌드에 대한 결과이며 실제 운영 데이터·Chrome·외부 서비스 동작은 실행 범위에 포함되지 않았다.
+
+정규 회귀 검사: `src/test/validation.test.ts`의 범위 검증과 `src/test/capture-delivery.test.ts`의 합성 저장·전송 실패·재시도·큐 제거를 `npm test`로 실행한다. 작업 폴더의 스크립트는 과거 증빙 사본이다.
